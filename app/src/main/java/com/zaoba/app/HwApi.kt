@@ -128,4 +128,22 @@ object HwApi {
             JSONObject(resp.body?.string() ?: throw Exception("空响应"))
         }
     }
+
+    /** 发布文章（需登录 token） */
+    suspend fun articleCreate(token: String, title: String, content: String, category: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("title", title)
+                .put("content", content)
+                .put("category", category)
+                .toString().toRequestBody("application/json".toMediaType())
+            val req = Request.Builder()
+                .url("$BASE_URL/api/article/create")
+                .header("X-Session-Token", token)
+                .post(body)
+                .build()
+            client.newCall(req).execute().use { resp ->
+                JSONObject(resp.body?.string() ?: throw Exception("空响应"))
+            }
+        }
 }

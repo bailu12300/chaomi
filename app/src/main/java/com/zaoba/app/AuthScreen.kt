@@ -16,8 +16,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.app.Application
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -26,16 +28,17 @@ private val Brand = Theme.Brand
 private val TextPrimary = Theme.TextPrimary
 private val TextSecondary = Theme.TextSecondary
 
-/** 账号体系 ViewModel */
-class AuthViewModel : ViewModel() {
+/** 账号体系 ViewModel（登录态持久化） */
+class AuthViewModel(app: Application) : AndroidViewModel(app) {
     var busy by mutableStateOf(false)
         private set
     var msg by mutableStateOf<String?>(null)
         private set
-    var loggedIn by mutableStateOf(false)
+    // 登录态：从 Session 持久化恢复
+    var user by mutableStateOf(Session.load(getApplication()))
         private set
-    var token by mutableStateOf("")
-        private set
+    val loggedIn: Boolean get() = user.isLoggedIn
+    val token: String get() = user.token
 
     fun sendCode(email: String, onDone: (String) -> Unit) {
         if (busy) return
@@ -62,9 +65,9 @@ class AuthViewModel : ViewModel() {
             try {
                 val r = HwApi.register(username, password, email, code, nickname, device)
                 if (r.optInt("code") == 0) {
+                    Session.save(getApplication(), r)
+                    user = Session.load(getApplication())
                     msg = "注册成功，已登录"
-                    loggedIn = true
-                    token = r.optString("token", "")
                 } else {
                     msg = r.optString("msg", "注册失败")
                 }
@@ -81,9 +84,9 @@ class AuthViewModel : ViewModel() {
             try {
                 val r = HwApi.login(username, password)
                 if (r.optInt("code") == 0) {
+                    Session.save(getApplication(), r)
+                    user = Session.load(getApplication())
                     msg = "登录成功"
-                    loggedIn = true
-                    token = r.optString("token", "")
                 } else {
                     msg = r.optString("msg", "登录失败")
                 }
@@ -92,11 +95,54 @@ class AuthViewModel : ViewModel() {
             } finally { busy = false }
         }
     }
+
+    fun logout() {
+        Session.clear(getApplication())
+        user = Session.load(getApplication())
+        msg = "已退出登录"
+    }
 }
 
 @Composable
 fun AuthScreen(vm: AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel()) {
     var mode by remember { mutableStateOf("login") }  // "login" | "register"
+
+    if (vm.loggedIn) {
+        // 已登录：显示用户信息 + 退出
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(PageBg)
+                .statusBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("早八", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Brand)
+            Spacer(Modifier.height(24.dp))
+            Text(
+                vm.user.nickname.ifBlank { vm.user.username.ifBlank { "已登录" } },
+                fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary
+            )
+            if (vm.user.username.isNotBlank()) {
+                Text("用户名：${vm.user.username}", fontSize = 14.sp, color = TextSecondary, modifier = Modifier.padding(top = 6.dp))
+            }
+            if (vm.user.email.isNotBlank()) {
+                Text("邮箱：${vm.user.email}", fontSize = 14.sp, color = TextSecondary, modifier = Modifier.padding(top = 4.dp))
+            }
+            Spacer(Modifier.height(32.dp))
+            Button(
+                onClick = { vm.logout() },
+                colors = ButtonDefaults.buttonColors(containerColor = Brand),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("退出登录", fontSize = 16.sp)
+            }
+            vm.msg?.let {
+                Text(it, fontSize = 13.sp, color = TextSecondary, modifier = Modifier.padding(top = 12.dp))
+            }
+        }
+        return
+    }
 
     Column(
         modifier = Modifier
