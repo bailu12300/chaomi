@@ -49,4 +49,6 @@ dependencies {
     implementation("org.json:json:20240303")
     // 协程
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    // WorkManager（后台采集）
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 }

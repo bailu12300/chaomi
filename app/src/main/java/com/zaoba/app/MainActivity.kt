@@ -39,6 +39,16 @@ class MainViewModel : ViewModel() {
     var error by mutableStateOf<String?>(null)
         private set
 
+    // 采集进度状态
+    var crawlRunning by mutableStateOf(false)
+        private set
+    var crawlDone by mutableStateOf(0)
+        private set
+    var crawlTotal by mutableStateOf(0)
+        private set
+    var crawlCurrent by mutableStateOf("")
+        private set
+
     init { load() }
 
     fun load() {
@@ -52,6 +62,22 @@ class MainViewModel : ViewModel() {
             } finally {
                 loading = false
             }
+            loadStatus()
+        }
+    }
+
+    /** 拉取采集进度（服务器状态） */
+    fun loadStatus() {
+        viewModelScope.launch {
+            try {
+                val s = HwApi.fetchStatus()
+                crawlRunning = s.running
+                crawlDone = s.done
+                crawlTotal = s.total
+                crawlCurrent = s.current
+            } catch (e: Exception) {
+                // 进度拉取失败不阻塞主流程
+            }
         }
     }
 }
@@ -59,6 +85,8 @@ class MainViewModel : ViewModel() {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 启动采集调度：每 12 小时一轮，后台运行，断点续传
+        CrawlScheduler.schedule(applicationContext)
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(
                 primary = Brand,
@@ -88,6 +116,27 @@ fun HwScreen(vm: MainViewModel = viewModel()) {
             Text("硬件行情", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Spacer(Modifier.weight(1f))
             Text("全网实时价", fontSize = 12.sp, color = TextSecondary)
+        }
+
+        // 采集进度（后台采集状态可见）
+        if (vm.crawlRunning) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                LinearProgressIndicator(
+                    progress = { if (vm.crawlTotal > 0) vm.crawlDone.toFloat() / vm.crawlTotal else 0f },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Brand
+                )
+                Text(
+                    "采集中 ${vm.crawlDone}/${vm.crawlTotal} · ${vm.crawlCurrent}",
+                    fontSize = 12.sp,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
         }
 
         when {

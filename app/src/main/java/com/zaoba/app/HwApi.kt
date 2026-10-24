@@ -34,4 +34,25 @@ object HwApi {
             (0 until arr.length()).map { HwModel.fromJson(arr.getJSONObject(it)) }
         }
     }
+
+    /** 采集状态 */
+    data class CrawlStatus(val running: Boolean, val done: Int, val total: Int, val current: String)
+
+    suspend fun fetchStatus(): CrawlStatus = withContext(Dispatchers.IO) {
+        val req = Request.Builder()
+            .url("$BASE_URL/api/hw/status")
+            .get()
+            .build()
+        client.newCall(req).execute().use { resp ->
+            val body = resp.body?.string() ?: throw Exception("空响应")
+            val root = JSONObject(body)
+            val d = root.optJSONObject("data") ?: JSONObject()
+            CrawlStatus(
+                running = d.optBoolean("running"),
+                done = d.optInt("done"),
+                total = d.optInt("total"),
+                current = d.optString("current")
+            )
+        }
+    }
 }
