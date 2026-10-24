@@ -79,10 +79,9 @@ fun ArticleScreen(onBack: () -> Unit, vm: ArticleViewModel = viewModel()) {
     ) {
         // 标题栏
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = onBack) { Text("←", color = Brand, fontSize = 18.sp) }
             Text("资讯", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Spacer(Modifier.weight(1f))
             TextButton(onClick = { vm.refresh() }) {

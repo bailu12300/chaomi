@@ -39,7 +39,7 @@ object HwApi {
     }
 
     /** 采集状态 */
-    data class CrawlStatus(val running: Boolean, val done: Int, val total: Int, val current: String)
+    data class CrawlStatus(val running: Boolean, val done: Int, val total: Int, val current: String, val lastDoneAt: Long)
 
     suspend fun fetchStatus(): CrawlStatus = withContext(Dispatchers.IO) {
         val req = Request.Builder()
@@ -54,9 +54,17 @@ object HwApi {
                 running = d.optBoolean("running"),
                 done = d.optInt("done"),
                 total = d.optInt("total"),
-                current = d.optString("current")
+                current = d.optString("current"),
+                lastDoneAt = d.optLong("lastDoneAt")
             )
         }
+    }
+
+    fun fmtTime(ts: Long): String {
+        if (ts <= 0) return ""
+        val d = java.util.Date(ts)
+        val f = java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
+        return f.format(d)
     }
 
     // ---------- 账号体系 ----------

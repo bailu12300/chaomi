@@ -4,32 +4,42 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
+import java.text.DecimalFormat
 
-// App 主题色：见 Theme.kt（米暖色）
 private val PageBg = Theme.PageBg
 private val Brand = Theme.Brand
+private val Brand2 = Theme.Brand2
 private val TextPrimary = Theme.TextPrimary
 private val TextSecondary = Theme.TextSecondary
 private val CardBg = Theme.CardBg
+private val Line = Theme.Line
 
-/** 分类展示顺序 */
-private val CAT_ORDER = listOf("GPU" to "显卡", "CPU" to "处理器", "SSD" to "固态硬盘", "RAM" to "内存条", "NB" to "笔记本")
+private val priceFmt = DecimalFormat("#,###.##")
+
+/** 分类 */
+private val CATS = listOf(
+    "GPU" to "显卡", "CPU" to "处理器", "SSD" to "固态硬盘", "RAM" to "内存条", "NB" to "笔记本"
+)
 
 class MainViewModel : ViewModel() {
     var models by mutableStateOf<List<HwModel>>(emptyList())
@@ -38,20 +48,14 @@ class MainViewModel : ViewModel() {
         private set
     var error by mutableStateOf<String?>(null)
         private set
-
-    // 采集进度状态
-    var crawlRunning by mutableStateOf(false)
-        private set
-    var crawlDone by mutableStateOf(0)
-        private set
-    var crawlTotal by mutableStateOf(0)
-        private set
-    var crawlCurrent by mutableStateOf("")
-        private set
+    var crawlRunning by mutableStateOf(false); private set
+    var crawlDone by mutableStateOf(0); private set
+    var crawlTotal by mutableStateOf(0); private set
+    var crawlCurrent by mutableStateOf(""); private set
+    var lastDoneAt by mutableStateOf(0L); private set
 
     init { load(); startPolling() }
 
-    /** 定时轮询采集进度（每 3 秒刷新，进度条实时变化） */
     private fun startPolling() {
         viewModelScope.launch {
             while (true) {
@@ -63,19 +67,13 @@ class MainViewModel : ViewModel() {
 
     fun load() {
         viewModelScope.launch {
-            loading = true
-            error = null
-            try {
-                models = HwApi.fetchModels()
-            } catch (e: Exception) {
-                error = e.message ?: "加载失败"
-            } finally {
-                loading = false
-            }
+            loading = true; error = null
+            try { models = HwApi.fetchModels() }
+            catch (e: Exception) { error = e.message ?: "加载失败" }
+            finally { loading = false }
         }
     }
 
-    /** 拉取采集进度（服务器状态） */
     fun loadStatus() {
         viewModelScope.launch {
             try {
@@ -84,9 +82,8 @@ class MainViewModel : ViewModel() {
                 crawlDone = s.done
                 crawlTotal = s.total
                 crawlCurrent = s.current
-            } catch (e: Exception) {
-                // 进度拉取失败不阻塞主流程
-            }
+                lastDoneAt = s.lastDoneAt
+            } catch (e: Exception) {}
         }
     }
 }
@@ -94,154 +91,231 @@ class MainViewModel : ViewModel() {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 启动采集调度：每 12 小时一轮，后台运行，断点续传
         CrawlScheduler.schedule(applicationContext)
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(
-                primary = Brand,
-                background = PageBg
+                primary = Brand, background = PageBg, surface = CardBg
             )) {
-                var page by remember { mutableStateOf("hw") }  // "hw" | "auth" | "article"
-                when (page) {
-                    "auth" -> {
-                        AuthScreen()
-                        TextButton(onClick = { page = "hw" }, modifier = Modifier.padding(8.dp)) {
-                            Text("← 返回行情", color = Brand)
-                        }
-                    }
-                    "article" -> ArticleScreen(onBack = { page = "hw" })
-                    else -> HwScreen(
-                        onOpenAuth = { page = "auth" },
-                        onOpenArticle = { page = "article" }
-                    )
-                }
+                AppRoot()
+            }
+        }
+    }
+}
+
+/** 顶层：底部导航 + 三个 tab */
+@Composable
+fun AppRoot() {
+    var tab by remember { mutableStateOf(0) }  // 0 行情 1 资讯 2 我的
+
+    Scaffold(
+        containerColor = PageBg,
+        bottomBar = {
+            NavigationBar(containerColor = CardBg) {
+                NavigationBarItem(
+                    selected = tab == 0, onClick = { tab = 0 },
+                    icon = { Text("📈", fontSize = 18.sp) },
+                    label = { Text("行情") }
+                )
+                NavigationBarItem(
+                    selected = tab == 1, onClick = { tab = 1 },
+                    icon = { Text("📰", fontSize = 18.sp) },
+                    label = { Text("资讯") }
+                )
+                NavigationBarItem(
+                    selected = tab == 2, onClick = { tab = 2 },
+                    icon = { Text("👤", fontSize = 18.sp) },
+                    label = { Text("我的") }
+                )
+            }
+        }
+    ) { padding ->
+        Box(Modifier.padding(padding)) {
+            when (tab) {
+                0 -> HwScreen()
+                1 -> ArticleScreen(onBack = {})
+                2 -> AuthScreen()
             }
         }
     }
 }
 
 @Composable
-fun HwScreen(vm: MainViewModel = viewModel(), onOpenAuth: () -> Unit = {}, onOpenArticle: () -> Unit = {}) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(PageBg)
-            .statusBarsPadding()
-    ) {
-        // 顶部标题
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("硬件行情", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onOpenArticle) {
-                Text("资讯", color = Brand, fontSize = 14.sp)
-            }
-            TextButton(onClick = onOpenAuth) {
-                Text("账号", color = Brand, fontSize = 14.sp)
-            }
-        }
+fun HwScreen(vm: MainViewModel = viewModel()) {
+    var selectedCat by remember { mutableStateOf<String?>(null) }  // null = 全部
 
-        // 采集进度（后台采集状态可见）
-        if (vm.crawlRunning) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-            ) {
-                LinearProgressIndicator(
-                    progress = { if (vm.crawlTotal > 0) vm.crawlDone.toFloat() / vm.crawlTotal else 0f },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = Brand
-                )
-                Text(
-                    "采集中 ${vm.crawlDone}/${vm.crawlTotal} · ${vm.crawlCurrent}",
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-        }
+    Column(Modifier.fillMaxSize().background(PageBg).statusBarsPadding()) {
+        // 顶部
+        Header(vm)
+
+        // 分类筛选
+        CatFilter(selectedCat) { selectedCat = it }
 
         when {
             vm.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Brand)
             }
-            vm.error != null -> Column(
-                Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text("加载失败：${vm.error}", color = TextSecondary, fontSize = 14.sp)
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = { vm.load() }, colors = ButtonDefaults.buttonColors(containerColor = Brand)) {
-                    Text("重试")
-                }
+            vm.error != null -> ErrorView(vm.error ?: "") { vm.load() }
+            else -> {
+                val priced = vm.models.filter { it.price != null }
+                val filtered = if (selectedCat == null) priced else priced.filter { it.cat == selectedCat }
+                HwList(filtered)
             }
-            else -> HwList(vm.models)
         }
     }
 }
 
 @Composable
-fun HwList(models: List<HwModel>) {
-    val priced = models.filter { it.price != null }
+private fun Header(vm: MainViewModel) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Logo + 名称
+            Box(
+                Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(Brand),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("早", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text("早八", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text("硬件行情", fontSize = 12.sp, color = TextSecondary)
+            }
+            Spacer(Modifier.weight(1f))
+            // LIVE 徽章
+            if (vm.crawlRunning) {
+                Surface(
+                    color = Theme.Up.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(12.dp),
+                    contentColor = Theme.Up
+                ) {
+                    Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(Theme.Up))
+                        Spacer(Modifier.width(4.dp))
+                        Text("采集中", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            } else {
+                Text(
+                    if (vm.lastDoneAt > 0) "更新于 ${HwApi.fmtTime(vm.lastDoneAt)}" else "待采集",
+                    fontSize = 12.sp, color = TextSecondary
+                )
+            }
+        }
+
+        // 采集进度
+        if (vm.crawlRunning && vm.crawlTotal > 0) {
+            Spacer(Modifier.height(10.dp))
+            LinearProgressIndicator(
+                progress = { vm.crawlDone.toFloat() / vm.crawlTotal },
+                modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
+                color = Brand, trackColor = Brand.copy(alpha = 0.12f)
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "正在采集 ${vm.crawlDone}/${vm.crawlTotal} · ${vm.crawlCurrent}",
+                fontSize = 11.sp, color = TextSecondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun CatFilter(selected: String?, onSelect: (String?) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        CatChip("全部", selected == null) { onSelect(null) }
+        CATS.forEach { (cat, label) ->
+            CatChip(label, selected == cat) { onSelect(cat) }
+        }
+    }
+}
+
+@Composable
+private fun CatChip(label: String, active: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        color = if (active) Brand else CardBg,
+        contentColor = if (active) Color.White else TextSecondary,
+        shape = RoundedCornerShape(16.dp),
+        border = if (active) null else androidx.compose.foundation.BorderStroke(1.dp, Line)
+    ) {
+        Text(
+            label,
+            fontSize = 13.sp,
+            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+        )
+    }
+}
+
+@Composable
+private fun ErrorView(msg: String, onRetry: () -> Unit) {
+    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text("加载失败：$msg", color = TextSecondary, fontSize = 14.sp)
+        Spacer(Modifier.height(12.dp))
+        Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text("重试") }
+    }
+}
+
+@Composable
+private fun HwList(models: List<HwModel>) {
+    if (models.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("暂无数据，等待首次采集", color = TextSecondary, fontSize = 14.sp)
+        }
+        return
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        CAT_ORDER.forEach { (cat, label) ->
-            val group = priced.filter { it.cat == cat }
-            if (group.isNotEmpty()) {
-                item(key = "cat_$cat") {
-                    Text(
-                        "$label · ${group.size} 款有价",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
-                        modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
-                    )
-                }
-                items(group.sortedByDescending { it.price }, key = { it.key }) { m ->
-                    HwRow(m)
-                }
-            }
+        items(models.sortedByDescending { it.price }, key = { it.key }) { m ->
+            HwCard(m)
         }
     }
 }
 
 @Composable
-fun HwRow(m: HwModel) {
+private fun HwCard(m: HwModel) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBg)
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // 型号 + 规格
             Column(Modifier.weight(1f)) {
-                Text(m.model, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                Text(
+                    m.model,
+                    fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
                 val spec = listOf(m.brand, m.spec).filter { it.isNotBlank() }.joinToString(" · ")
                 if (spec.isNotBlank()) {
-                    Text(spec, fontSize = 12.sp, color = TextSecondary)
+                    Spacer(Modifier.height(3.dp))
+                    Text(spec, fontSize = 12.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            Text(
-                "¥${m.price}",
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                color = Brand
-            )
-            m.platform?.let {
-                Text("  $it", fontSize = 12.sp, color = TextSecondary)
+            Spacer(Modifier.width(12.dp))
+            // 价格
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    "¥${priceFmt.format(m.price)}",
+                    fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Brand
+                )
+                m.platform?.let {
+                    Spacer(Modifier.height(2.dp))
+                    Surface(color = Theme.Brand2.copy(alpha = 0.14f), shape = RoundedCornerShape(6.dp)) {
+                        Text(it, fontSize = 11.sp, color = Brand, modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp))
+                    }
+                }
             }
         }
     }

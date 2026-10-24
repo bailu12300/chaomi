@@ -10,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -27,6 +28,7 @@ private val PageBg = Theme.PageBg
 private val Brand = Theme.Brand
 private val TextPrimary = Theme.TextPrimary
 private val TextSecondary = Theme.TextSecondary
+private val CardBg = Theme.CardBg
 
 /** 账号体系 ViewModel（登录态持久化） */
 class AuthViewModel(app: Application) : AndroidViewModel(app) {
@@ -108,34 +110,54 @@ fun AuthScreen(vm: AuthViewModel = androidx.lifecycle.viewmodel.compose.viewMode
     var mode by remember { mutableStateOf("login") }  // "login" | "register"
 
     if (vm.loggedIn) {
-        // 已登录：显示用户信息 + 退出
+        // 已登录：头像 + 用户信息 + 退出
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(PageBg)
                 .statusBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = 20.dp, vertical = 24.dp)
         ) {
-            Text("早八", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Brand)
-            Spacer(Modifier.height(24.dp))
-            Text(
-                vm.user.nickname.ifBlank { vm.user.username.ifBlank { "已登录" } },
-                fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary
-            )
-            if (vm.user.username.isNotBlank()) {
-                Text("用户名：${vm.user.username}", fontSize = 14.sp, color = TextSecondary, modifier = Modifier.padding(top = 6.dp))
-            }
-            if (vm.user.email.isNotBlank()) {
-                Text("邮箱：${vm.user.email}", fontSize = 14.sp, color = TextSecondary, modifier = Modifier.padding(top = 4.dp))
-            }
-            Spacer(Modifier.height(32.dp))
-            Button(
-                onClick = { vm.logout() },
-                colors = ButtonDefaults.buttonColors(containerColor = Brand),
-                modifier = Modifier.fillMaxWidth()
+            Text("我的", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Spacer(Modifier.height(20.dp))
+
+            // 头像 + 昵称
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = CardBg)
             ) {
-                Text("退出登录", fontSize = 16.sp)
+                Column(
+                    Modifier.fillMaxWidth().padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    val displayName = vm.user.nickname.ifBlank { vm.user.username.ifBlank { "早八用户" } }
+                    Box(
+                        Modifier.size(72.dp).clip(RoundedCornerShape(36.dp)).background(Brand),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(displayName.take(1), color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(displayName, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    if (vm.user.username.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text("用户名：${vm.user.username}", fontSize = 13.sp, color = TextSecondary)
+                    }
+                    if (vm.user.email.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(vm.user.email, fontSize = 13.sp, color = TextSecondary)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            OutlinedButton(
+                onClick = { vm.logout() },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Theme.Up)
+            ) {
+                Text("退出登录", fontSize = 15.sp)
             }
             vm.msg?.let {
                 Text(it, fontSize = 13.sp, color = TextSecondary, modifier = Modifier.padding(top = 12.dp))
@@ -153,10 +175,10 @@ fun AuthScreen(vm: AuthViewModel = androidx.lifecycle.viewmodel.compose.viewMode
             .padding(horizontal = 24.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("早八", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Brand)
+        Text("我的", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
         Text(
             if (mode == "login") "登录账号" else "注册账号",
-            fontSize = 16.sp, color = TextSecondary, modifier = Modifier.padding(top = 4.dp, bottom = 28.dp)
+            fontSize = 15.sp, color = TextSecondary, modifier = Modifier.padding(top = 4.dp, bottom = 28.dp)
         )
 
         if (mode == "login") {
