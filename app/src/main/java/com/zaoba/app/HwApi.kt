@@ -173,4 +173,57 @@ object HwApi {
                 JSONObject(resp.body?.string() ?: throw Exception("空响应"))
             }
         }
+
+    // ---------- 评论 + 点赞 ----------
+
+    data class Comment(val id: String, val content: String, val authorName: String, val createdAt: Long)
+
+    /** 评论列表 */
+    suspend fun articleComments(articleId: String): List<Comment> = withContext(Dispatchers.IO) {
+        val req = Request.Builder()
+            .url("$BASE_URL/api/article/comments?articleId=${java.net.URLEncoder.encode(articleId, "UTF-8")}")
+            .get().build()
+        client.newCall(req).execute().use { resp ->
+            val root = JSONObject(resp.body?.string() ?: throw Exception("空响应"))
+            val arr = root.optJSONObject("data")?.optJSONArray("rows") ?: JSONArray()
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                Comment(o.optString("id"), o.optString("content"), o.optString("authorName"), o.optLong("createdAt"))
+            }
+        }
+    }
+
+    /** 发评论 */
+    suspend fun addComment(token: String, articleId: String, content: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("articleId", articleId).put("content", content)
+                .toString().toRequestBody("application/json".toMediaType())
+            val req = Request.Builder().url("$BASE_URL/api/article/comment")
+                .header("X-Session-Token", token).post(body).build()
+            client.newCall(req).execute().use { resp ->
+                JSONObject(resp.body?.string() ?: throw Exception("空响应"))
+            }
+        }
+
+    /** 点赞/取消赞 */
+    suspend fun toggleLike(token: String, articleId: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("articleId", articleId)
+                .toString().toRequestBody("application/json".toMediaType())
+            val req = Request.Builder().url("$BASE_URL/api/article/like")
+                .header("X-Session-Token", token).post(body).build()
+            client.newCall(req).execute().use { resp ->
+                JSONObject(resp.body?.string() ?: throw Exception("空响应"))
+            }
+        }
+
+    /** 点赞数 */
+    suspend fun likeInfo(articleId: String): JSONObject = withContext(Dispatchers.IO) {
+        val req = Request.Builder()
+            .url("$BASE_URL/api/article/like-info?articleId=${java.net.URLEncoder.encode(articleId, "UTF-8")}")
+            .get().build()
+        client.newCall(req).execute().use { resp ->
+            JSONObject(resp.body?.string() ?: throw Exception("空响应"))
+        }
+    }
 }
