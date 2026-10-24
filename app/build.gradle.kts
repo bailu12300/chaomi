@@ -12,8 +12,8 @@ android {
         applicationId = "com.zaoba.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 37
-        versionName = "1.0.0"
+        versionCode = 40
+        versionName = "1.0.3"
     }
 
     buildTypes {
