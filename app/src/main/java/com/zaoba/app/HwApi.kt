@@ -6,6 +6,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
@@ -77,13 +78,15 @@ object HwApi {
     }
 
     /** 注册（邮箱验证码） */
-    suspend fun register(username: String, password: String, email: String, code: String): JSONObject =
+    suspend fun register(username: String, password: String, email: String, code: String, nickname: String, device: JSONObject): JSONObject =
         withContext(Dispatchers.IO) {
             post("/api/auth/register", JSONObject()
                 .put("username", username)
                 .put("password", password)
                 .put("email", email)
-                .put("code", code))
+                .put("code", code)
+                .put("nickname", nickname)
+                .put("device", device))
         }
 
     /** 账号密码登录 */
@@ -91,5 +94,38 @@ object HwApi {
         post("/api/auth/password", JSONObject()
             .put("username", username)
             .put("password", password))
+    }
+
+    // ---------- 文章体系 ----------
+
+    data class Article(val id: String, val title: String, val category: String, val authorName: String, val viewCount: Int, val createdAt: Long)
+
+    /** 文章列表 */
+    suspend fun articleList(page: Int = 1, size: Int = 20): List<Article> = withContext(Dispatchers.IO) {
+        val req = Request.Builder()
+            .url("$BASE_URL/api/article/list?page=$page&size=$size")
+            .get().build()
+        client.newCall(req).execute().use { resp ->
+            val root = JSONObject(resp.body?.string() ?: throw Exception("空响应"))
+            if (root.optInt("code") != 0) throw Exception(root.optString("msg"))
+            val arr = root.optJSONObject("data")?.optJSONArray("rows") ?: JSONArray()
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                Article(
+                    o.optString("id"), o.optString("title"), o.optString("category"),
+                    o.optString("authorName"), o.optInt("viewCount"), o.optLong("createdAt")
+                )
+            }
+        }
+    }
+
+    /** 文章详情 */
+    suspend fun articleDetail(id: String): JSONObject = withContext(Dispatchers.IO) {
+        val req = Request.Builder()
+            .url("$BASE_URL/api/article/detail?id=${java.net.URLEncoder.encode(id, "UTF-8")}")
+            .get().build()
+        client.newCall(req).execute().use { resp ->
+            JSONObject(resp.body?.string() ?: throw Exception("空响应"))
+        }
     }
 }

@@ -21,12 +21,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 
-// App 主题色（沿用早八 App 配色）
-private val PageBg = Color(0xFFF4F7FB)
-private val Brand = Color(0xFF2F6FC0)
-private val TextPrimary = Color(0xFF1B2733)
-private val TextSecondary = Color(0xFF8A98A8)
-private val CardBg = Color(0xFFFFFFFF)
+// App 主题色：见 Theme.kt（米暖色）
+private val PageBg = Theme.PageBg
+private val Brand = Theme.Brand
+private val TextPrimary = Theme.TextPrimary
+private val TextSecondary = Theme.TextSecondary
+private val CardBg = Theme.CardBg
 
 /** 分类展示顺序 */
 private val CAT_ORDER = listOf("GPU" to "显卡", "CPU" to "处理器", "SSD" to "固态硬盘", "RAM" to "内存条", "NB" to "笔记本")
@@ -49,7 +49,17 @@ class MainViewModel : ViewModel() {
     var crawlCurrent by mutableStateOf("")
         private set
 
-    init { load() }
+    init { load(); startPolling() }
+
+    /** 定时轮询采集进度（每 3 秒刷新，进度条实时变化） */
+    private fun startPolling() {
+        viewModelScope.launch {
+            while (true) {
+                loadStatus()
+                kotlinx.coroutines.delay(3000)
+            }
+        }
+    }
 
     fun load() {
         viewModelScope.launch {
@@ -62,7 +72,6 @@ class MainViewModel : ViewModel() {
             } finally {
                 loading = false
             }
-            loadStatus()
         }
     }
 
@@ -92,15 +101,19 @@ class MainActivity : ComponentActivity() {
                 primary = Brand,
                 background = PageBg
             )) {
-                var showAuth by remember { mutableStateOf(false) }
-                if (showAuth) {
-                    AuthScreen()
-                    // 返回按钮
-                    TextButton(onClick = { showAuth = false }, modifier = Modifier.padding(8.dp)) {
-                        Text("← 返回行情", color = Brand)
+                var page by remember { mutableStateOf("hw") }  // "hw" | "auth" | "article"
+                when (page) {
+                    "auth" -> {
+                        AuthScreen()
+                        TextButton(onClick = { page = "hw" }, modifier = Modifier.padding(8.dp)) {
+                            Text("← 返回行情", color = Brand)
+                        }
                     }
-                } else {
-                    HwScreen(onOpenAuth = { showAuth = true })
+                    "article" -> ArticleScreen(onBack = { page = "hw" })
+                    else -> HwScreen(
+                        onOpenAuth = { page = "auth" },
+                        onOpenArticle = { page = "article" }
+                    )
                 }
             }
         }
@@ -108,7 +121,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun HwScreen(vm: MainViewModel = viewModel(), onOpenAuth: () -> Unit = {}) {
+fun HwScreen(vm: MainViewModel = viewModel(), onOpenAuth: () -> Unit = {}, onOpenArticle: () -> Unit = {}) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -124,6 +137,9 @@ fun HwScreen(vm: MainViewModel = viewModel(), onOpenAuth: () -> Unit = {}) {
         ) {
             Text("硬件行情", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Spacer(Modifier.weight(1f))
+            TextButton(onClick = onOpenArticle) {
+                Text("资讯", color = Brand, fontSize = 14.sp)
+            }
             TextButton(onClick = onOpenAuth) {
                 Text("账号", color = Brand, fontSize = 14.sp)
             }

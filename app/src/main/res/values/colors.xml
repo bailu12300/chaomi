@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="page_bg">#F4F7FB</color>
-    <color name="brand">#2F6FC0</color>
-    <color name="text_primary">#1B2733</color>
-    <color name="text_secondary">#8A98A8</color>
+    <color name="page_bg">#FDF8F0</color>
+    <color name="brand">#F0713A</color>
+    <color name="text_primary">#2B2118</color>
+    <color name="text_secondary">#7A6A58</color>
     <color name="ic_launcher_background">#F8F8E8</color>
 </resources>

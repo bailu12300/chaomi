@@ -21,10 +21,10 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
-private val PageBg = Color(0xFFF4F7FB)
-private val Brand = Color(0xFF2F6FC0)
-private val TextPrimary = Color(0xFF1B2733)
-private val TextSecondary = Color(0xFF8A98A8)
+private val PageBg = Theme.PageBg
+private val Brand = Theme.Brand
+private val TextPrimary = Theme.TextPrimary
+private val TextSecondary = Theme.TextSecondary
 
 /** 账号体系 ViewModel */
 class AuthViewModel : ViewModel() {
@@ -55,12 +55,12 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    fun register(username: String, password: String, email: String, code: String) {
+    fun register(username: String, password: String, email: String, code: String, nickname: String, device: JSONObject) {
         if (busy) return
         viewModelScope.launch {
             busy = true; msg = null
             try {
-                val r = HwApi.register(username, password, email, code)
+                val r = HwApi.register(username, password, email, code, nickname, device)
                 if (r.optInt("code") == 0) {
                     msg = "注册成功，已登录"
                     loggedIn = true
@@ -152,9 +152,11 @@ private fun LoginForm(vm: AuthViewModel) {
 
 @Composable
 private fun RegisterForm(vm: AuthViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var email by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
+    var nickname by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
     Field("邮箱", email, keyboardType = KeyboardType.Email) { email = it }
@@ -172,10 +174,14 @@ private fun RegisterForm(vm: AuthViewModel) {
     }
 
     Field("用户名", username) { username = it }
+    Field("昵称（汉字，可选）", nickname) { nickname = it }
     Field("密码", password, isPassword = true) { password = it }
 
     Button(
-        onClick = { vm.register(username.trim(), password, email.trim(), code.trim()) },
+        onClick = {
+            val device = DeviceInfo.collect(context)
+            vm.register(username.trim(), password, email.trim(), code.trim(), nickname.trim(), device)
+        },
         enabled = !vm.busy && email.contains("@") && code.isNotBlank() && username.isNotBlank() && password.isNotBlank(),
         modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
         colors = ButtonDefaults.buttonColors(containerColor = Brand)
