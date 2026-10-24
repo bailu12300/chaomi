@@ -202,17 +202,21 @@ private fun Header(vm: MainViewModel) {
             }
         }
 
-        // 采集进度
-        if (vm.crawlRunning && vm.crawlTotal > 0) {
+        // 采集进度（始终显示，采完写满，下轮重置）
+        if (vm.crawlTotal > 0) {
+            val finished = !vm.crawlRunning && vm.crawlDone >= vm.crawlTotal
             Spacer(Modifier.height(10.dp))
             LinearProgressIndicator(
-                progress = { vm.crawlDone.toFloat() / vm.crawlTotal },
+                progress = { if (finished) 1f else vm.crawlDone.toFloat() / vm.crawlTotal },
                 modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
-                color = Brand, trackColor = Brand.copy(alpha = 0.12f)
+                color = if (finished) Theme.Down else Brand,
+                trackColor = Brand.copy(alpha = 0.12f)
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "正在采集 ${vm.crawlDone}/${vm.crawlTotal} · ${vm.crawlCurrent}",
+                if (finished) "本轮采集完成 ${vm.crawlDone}/${vm.crawlTotal}"
+                else if (vm.crawlRunning) "正在采集 ${vm.crawlDone}/${vm.crawlTotal} · ${vm.crawlCurrent}"
+                else "已采集 ${vm.crawlDone}/${vm.crawlTotal}（暂停，等待继续）",
                 fontSize = 11.sp, color = TextSecondary
             )
         }
@@ -304,12 +308,25 @@ private fun HwCard(m: HwModel) {
                 }
             }
             Spacer(Modifier.width(12.dp))
-            // 价格
+            // 价格 + 涨跌
             Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    "¥${priceFmt.format(m.price)}",
-                    fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Brand
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 涨跌箭头（红涨绿跌，中国习惯）
+                    when (m.trend) {
+                        "up" -> Text("▲", fontSize = 12.sp, color = Theme.Up)
+                        "down" -> Text("▼", fontSize = 12.sp, color = Theme.Down)
+                    }
+                    if (m.trend != "flat") Spacer(Modifier.width(3.dp))
+                    Text(
+                        "¥${priceFmt.format(m.price)}",
+                        fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                        color = when (m.trend) {
+                            "up" -> Theme.Up
+                            "down" -> Theme.Down
+                            else -> Brand
+                        }
+                    )
+                }
                 m.platform?.let {
                     Spacer(Modifier.height(2.dp))
                     Surface(color = Theme.Brand2.copy(alpha = 0.14f), shape = RoundedCornerShape(6.dp)) {

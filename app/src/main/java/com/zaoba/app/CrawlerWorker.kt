@@ -3,66 +3,61 @@ package com.zaoba.app
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import kotlinx.coroutines.delay
 
 /**
- * 后台采集任务（WorkManager）。
+ * 单型号采集任务（WorkManager，短任务，几秒内完成）。
  *
- * 逻辑：
- *   1. 拉型号清单
- *   2. 从本地断点（doneIndex）继续采集
- *   3. 每采集一个型号，等 3 分钟（节流），并上报进度 + 更新本地断点
- *   4. 跑完一轮 → 记录完成时间，12 小时后下一轮（由 WorkManager 调度）
- *   5. 意外被杀后台 → 下次启动从 doneIndex 继续（断点续传）
+ * ★ 关键架构：不在一开始就 delay 3 分钟跑完全部型号（CoroutineWorker 有执行时长上限，
+ *   会被系统终止导致"采集停"）。改为：
+ *   - 每个 worker 只采「一个型号」（几秒完成）
+ *   - 采完后 schedule 下一个型号（延迟 3 分钟）
+ *   - 断点续传：本地记录 doneIndex，被杀后从断点继续
  */
 class CrawlerWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
 
     override suspend fun doWork(): Result {
         return try {
-            runCrawl()
+            crawlOne()
             Result.success()
         } catch (e: Exception) {
-            // 失败不崩溃，交给 WorkManager 重试（retry）
-            if (runAttemptCount < 3) Result.retry() else Result.failure()
+            // 单型号失败不重试（避免卡住），继续下一个
+            Result.success()
         }
     }
 
-    private suspend fun runCrawl() {
+    private suspend fun crawlOne() {
         val ctx = applicationContext
         val models = Crawler.fetchModels().filter { it.keyword.isNotBlank() }
         if (models.isEmpty()) return
 
         val total = models.size
-        val startIndex = Crawler.getDoneIndex(ctx).coerceIn(0, total)
+        val index = Crawler.getDoneIndex(ctx).coerceIn(0, total)
 
-        // 上报开始
-        Crawler.reportProgress(running = true, done = startIndex, total = total, current = "", finished = false)
-
-        for (i in startIndex until total) {
-            val model = models[i]
-            // 上报当前进度
-            Crawler.reportProgress(running = true, done = i, total = total, current = model.model, finished = false)
-
-            // 手机 IP 抓慢慢买
-            val ok = try {
-                val text = Crawler.fetchManmanbuy(model.keyword)
-                Crawler.ingest(model, text)
-            } catch (e: Exception) {
-                false
-            }
-
-            // 更新本地断点（无论成功失败都推进，避免卡在同一型号）
-            Crawler.setDoneIndex(ctx, i + 1)
-
-            // 3 分钟节流（最后一个型号不用等）
-            if (i < total - 1) {
-                delay(Crawler.THROTTLE_MS)
-            }
+        // 一轮已采完 → 重置断点，开始新一轮
+        if (index >= total) {
+            Crawler.setDoneIndex(ctx, 0)
+            Crawler.setLastRoundAt(ctx, System.currentTimeMillis())
+            Crawler.reportProgress(running = false, done = total, total = total, current = "", finished = true)
+            return
         }
 
-        // 一轮完成
-        Crawler.setDoneIndex(ctx, 0)          // 重置断点，下一轮从头开始
-        Crawler.setLastRoundAt(ctx, System.currentTimeMillis())
-        Crawler.reportProgress(running = false, done = total, total = total, current = "", finished = true)
+        val model = models[index]
+
+        // 上报进度（running 持续，进度条不消失）
+        Crawler.reportProgress(running = true, done = index, total = total, current = model.model, finished = false)
+
+        // 采这一个型号（手机 IP 抓慢慢买 → 上报）
+        try {
+            val text = Crawler.fetchManmanbuy(model.keyword)
+            Crawler.ingest(model, text)
+        } catch (e: Exception) {
+            // 单个型号失败不中断
+        }
+
+        // 推进断点
+        Crawler.setDoneIndex(ctx, index + 1)
+
+        // 调度下一个型号（3 分钟后）
+        CrawlScheduler.scheduleNext(ctx)
     }
 }
