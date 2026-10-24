@@ -2,8 +2,10 @@ package com.zaoba.app
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
@@ -54,5 +56,40 @@ object HwApi {
                 current = d.optString("current")
             )
         }
+    }
+
+    // ---------- 账号体系 ----------
+
+    private fun post(path: String, body: JSONObject): JSONObject {
+        val req = Request.Builder()
+            .url("$BASE_URL$path")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        return client.newCall(req).execute().use { resp ->
+            val s = resp.body?.string() ?: throw Exception("空响应")
+            JSONObject(s)
+        }
+    }
+
+    /** 发送邮箱验证码 */
+    suspend fun sendCode(email: String): JSONObject = withContext(Dispatchers.IO) {
+        post("/api/auth/send-code", JSONObject().put("email", email))
+    }
+
+    /** 注册（邮箱验证码） */
+    suspend fun register(username: String, password: String, email: String, code: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            post("/api/auth/register", JSONObject()
+                .put("username", username)
+                .put("password", password)
+                .put("email", email)
+                .put("code", code))
+        }
+
+    /** 账号密码登录 */
+    suspend fun login(username: String, password: String): JSONObject = withContext(Dispatchers.IO) {
+        post("/api/auth/password", JSONObject()
+            .put("username", username)
+            .put("password", password))
     }
 }

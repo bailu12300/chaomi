@@ -92,14 +92,23 @@ class MainActivity : ComponentActivity() {
                 primary = Brand,
                 background = PageBg
             )) {
-                HwScreen()
+                var showAuth by remember { mutableStateOf(false) }
+                if (showAuth) {
+                    AuthScreen()
+                    // 返回按钮
+                    TextButton(onClick = { showAuth = false }, modifier = Modifier.padding(8.dp)) {
+                        Text("← 返回行情", color = Brand)
+                    }
+                } else {
+                    HwScreen(onOpenAuth = { showAuth = true })
+                }
             }
         }
     }
 }
 
 @Composable
-fun HwScreen(vm: MainViewModel = viewModel()) {
+fun HwScreen(vm: MainViewModel = viewModel(), onOpenAuth: () -> Unit = {}) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -115,7 +124,9 @@ fun HwScreen(vm: MainViewModel = viewModel()) {
         ) {
             Text("硬件行情", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Spacer(Modifier.weight(1f))
-            Text("全网实时价", fontSize = 12.sp, color = TextSecondary)
+            TextButton(onClick = onOpenAuth) {
+                Text("账号", color = Brand, fontSize = 14.sp)
+            }
         }
 
         // 采集进度（后台采集状态可见）
