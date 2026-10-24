@@ -106,7 +106,10 @@ object HwApi {
 
     // ---------- 文章体系 ----------
 
-    data class Article(val id: String, val title: String, val category: String, val authorName: String, val viewCount: Int, val createdAt: Long)
+    data class Article(
+        val id: String, val title: String, val category: String, val authorName: String,
+        val viewCount: Int, val createdAt: Long, val tags: List<String>, val source: String
+    )
 
     /** 文章列表 */
     suspend fun articleList(page: Int = 1, size: Int = 20): List<Article> = withContext(Dispatchers.IO) {
@@ -119,11 +122,27 @@ object HwApi {
             val arr = root.optJSONObject("data")?.optJSONArray("rows") ?: JSONArray()
             (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
+                val tagsArr = o.optJSONArray("tags")
+                val tags = if (tagsArr == null) emptyList() else (0 until tagsArr.length()).map { tagsArr.optString(it) }
                 Article(
                     o.optString("id"), o.optString("title"), o.optString("category"),
-                    o.optString("authorName"), o.optInt("viewCount"), o.optLong("createdAt")
+                    o.optString("authorName"), o.optInt("viewCount"), o.optLong("createdAt"),
+                    tags, o.optString("source", "local")
                 )
             }
+        }
+    }
+
+    /** 公众号文章导入（需登录） */
+    suspend fun importWechat(token: String, url: String): JSONObject = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("url", url)
+            .toString().toRequestBody("application/json".toMediaType())
+        val req = Request.Builder()
+            .url("$BASE_URL/api/article/import-wechat")
+            .header("X-Session-Token", token)
+            .post(body).build()
+        client.newCall(req).execute().use { resp ->
+            JSONObject(resp.body?.string() ?: throw Exception("空响应"))
         }
     }
 

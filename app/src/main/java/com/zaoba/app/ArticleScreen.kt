@@ -71,6 +71,7 @@ class ArticleViewModel(app: Application) : AndroidViewModel(app) {
 fun ArticleScreen(onBack: () -> Unit, vm: ArticleViewModel = viewModel()) {
     var detailId by remember { mutableStateOf<String?>(null) }
     var showPublish by remember { mutableStateOf(false) }
+    var showImport by remember { mutableStateOf(false) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val user = remember { Session.load(ctx) }
 
@@ -87,8 +88,11 @@ fun ArticleScreen(onBack: () -> Unit, vm: ArticleViewModel = viewModel()) {
             TextButton(onClick = { vm.refresh() }) {
                 Text("刷新", color = Brand, fontSize = 14.sp)
             }
-            // 发布入口（登录后可见）
+            // 发布 + 导入入口（登录后可见）
             if (user.isLoggedIn) {
+                TextButton(onClick = { showImport = true }) {
+                    Text("导入", color = Brand, fontSize = 14.sp)
+                }
                 TextButton(onClick = { showPublish = true }) {
                     Text("＋发布", color = Brand, fontSize = 14.sp)
                 }
@@ -96,6 +100,11 @@ fun ArticleScreen(onBack: () -> Unit, vm: ArticleViewModel = viewModel()) {
         }
 
         when {
+            showImport -> ImportWechatDialog(
+                token = user.token,
+                onDone = { showImport = false; vm.refresh() },
+                onCancel = { showImport = false }
+            )
             showPublish -> PublishForm(
                 token = user.token,
                 onDone = { showPublish = false; vm.refresh() },
@@ -136,11 +145,24 @@ private fun ArticleCard(a: HwApi.Article, onClick: () -> Unit) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(a.category, fontSize = 11.sp, color = Brand, modifier = Modifier.background(Theme.Brand2.copy(alpha = 0.15f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp))
+                if (a.source == "wechat") {
+                    Spacer(Modifier.width(6.dp))
+                    Text("公众号", fontSize = 11.sp, color = Theme.Down, modifier = Modifier.background(Theme.Down.copy(alpha = 0.12f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp))
+                }
                 Spacer(Modifier.width(8.dp))
                 Text(fmtTime(a.createdAt), fontSize = 11.sp, color = TextSecondary)
             }
             Spacer(Modifier.height(10.dp))
             Text(a.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 2, lineHeight = 22.sp)
+            // 话题标签
+            if (a.tags.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    a.tags.take(4).forEach { t ->
+                        Text("#$t#", fontSize = 12.sp, color = Brand)
+                    }
+                }
+            }
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(a.authorName, fontSize = 12.sp, color = TextSecondary)
@@ -148,6 +170,52 @@ private fun ArticleCard(a: HwApi.Article, onClick: () -> Unit) {
                 Text("${a.viewCount} 阅读", fontSize = 12.sp, color = TextSecondary)
             }
         }
+    }
+}
+
+/** 公众号导入对话框 */
+@Composable
+fun ImportWechatDialog(token: String, onDone: () -> Unit, onCancel: () -> Unit) {
+    var url by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
+    ) {
+        Text("导入公众号文章", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text("粘贴公众号文章链接，自动解析正文到本站", fontSize = 13.sp, color = TextSecondary, modifier = Modifier.padding(top = 4.dp, bottom = 16.dp))
+        OutlinedTextField(
+            value = url, onValueChange = { url = it },
+            label = { Text("公众号链接 mp.weixin.qq.com/s/...") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(16.dp))
+        Row {
+            Button(
+                onClick = {
+                    busy = true
+                    scope.launch {
+                        try {
+                            val r = HwApi.importWechat(token, url.trim())
+                            if (r.optInt("code") == 0) {
+                                onDone()
+                            } else {
+                                msg = r.optString("msg", "导入失败")
+                            }
+                        } catch (e: Exception) { msg = e.message }
+                        finally { busy = false }
+                    }
+                },
+                enabled = !busy && url.trim().startsWith("https://mp.weixin.qq.com/"),
+                colors = ButtonDefaults.buttonColors(containerColor = Brand),
+                modifier = Modifier.weight(1f)
+            ) { Text(if (busy) "解析中…" else "导入", fontSize = 16.sp) }
+            Spacer(Modifier.width(10.dp))
+            OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("取消") }
+        }
+        msg?.let { Text(it, fontSize = 13.sp, color = TextSecondary, modifier = Modifier.padding(top = 12.dp)) }
     }
 }
 
