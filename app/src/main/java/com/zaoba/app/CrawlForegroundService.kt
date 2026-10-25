@@ -86,22 +86,20 @@ class CrawlForegroundService : Service() {
         if (models.isEmpty()) { delay(60_000); return }
 
         val total = models.size
-        var index = Crawler.getDoneIndex(ctx).coerceIn(0, total)
 
-        // ② 与服务端进度对齐：服务端是权威（本地可能因重装/清数据落后）
-        if (st != null && st.total > 0 && st.total == total && st.done != index) {
-            index = st.done.coerceIn(0, total)
-            Crawler.setDoneIndex(ctx, index)
-        }
+        // ② 进度以**服务端为准**（唯一权威）。
+        //    为什么不能先用本地 doneIndex：本地计数在重装/清数据/换版本后会错乱，
+        //    而服务端每轮 recordDoneKeys 是准确账本。服务端没有进度时才退回本地。
+        var index = if (st != null && st.done in 0..total) st.done else Crawler.getDoneIndex(ctx).coerceIn(0, total)
+        Crawler.setDoneIndex(ctx, index)   // 本地仅作离线兜底镜像
 
-        // ③ 本地已采完 → 等下一轮（服务端窗口结束后再来）
+        // ③ 本轮已采完 → 等下一轮（服务端窗口结束后再来）
         if (index >= total) {
             val waitMs = if (st != null && st.nextRoundInMs > 0) st.nextRoundInMs + 60_000L
                          else Crawler.THROTTLE_MS
             Crawler.reportProgress(running = false, done = total, total = total, current = "", finished = true)
             updateNotification("本轮已完成 $total/$total，${waitMs / 60000} 分钟后开始下一轮")
             delay(waitMs)
-            Crawler.setDoneIndex(ctx, 0)
             return
         }
 
@@ -109,23 +107,22 @@ class CrawlForegroundService : Service() {
         Crawler.reportProgress(running = true, done = index, total = total, current = model.model, finished = false)
         updateNotification("采集中 ${index + 1}/$total · ${model.model}")
 
-        // ④ 抓慢慢买 → 上报
+        // ④ 抓慢慢买 → 上报（服务端入库成功后会自动把本轮进度 +1）
         try {
             val text = Crawler.fetchManmanbuy(model.keyword)
             val r = Crawler.ingest(model, text)
             if (r.blockedByRound) {
-                // 服务端说该停了（保护期/本轮已采完）→ 不推进断点，直接等
+                // 服务端说该停了（保护期/本轮已采完）→ 直接等，不要重试
                 val waitMs = (st?.nextRoundInMs ?: 0).let { if (it > 0) it + 60_000L else 10 * 60 * 1000L }
                 updateNotification("${r.msg} · 等待下一轮")
                 delay(waitMs)
                 return
             }
         } catch (e: Exception) {
-            // 单型号失败不中断，继续下一个
+            // 单型号失败不中断，下一轮循环会重试同一型号（服务端未记账）
         }
 
-        // ⑤ 推进断点并等待 3 分钟
-        Crawler.setDoneIndex(ctx, index + 1)
+        // ⑤ 3 分钟节流（进度由服务端推进，本地不再自增，避免与服务端不一致）
         delay(Crawler.THROTTLE_MS)
     }
 
