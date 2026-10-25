@@ -18,7 +18,9 @@ data class HwModel(
     val platform: String?,
     val trend: String = "flat",
     val prevPrice: Double? = null,
-    val trends: List<Double> = emptyList()
+    val trends: List<Double> = emptyList(),
+    /** 搜索结果里没有可精确匹配的单型号商品 → 价格不可信，列表显示「暂无准确报价」 */
+    val noMatch: Boolean = false
 ) {
     companion object {
         fun fromJson(o: JSONObject): HwModel {
@@ -38,7 +40,8 @@ data class HwModel(
                 platform = o.optString("platform").ifBlank { null },
                 trend = o.optString("trend", "flat"),
                 prevPrice = pp,
-                trends = trends
+                trends = trends,
+                noMatch = o.optBoolean("noMatch", false)
             )
         }
     }

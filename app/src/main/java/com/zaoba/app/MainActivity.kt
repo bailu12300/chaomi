@@ -176,8 +176,11 @@ fun HwScreen(vm: MainViewModel = viewModel()) {
             }
             vm.error != null -> ErrorView(vm.error ?: "") { vm.load() }
             else -> {
-                val priced = vm.models.filter { it.price != null }
-                val filtered = if (selectedCat == null) priced else priced.filter { it.cat == selectedCat }
+                // 显示规则：有价格的正常显示；noMatch（采集到了商品但都不精确匹配）
+                // 也保留在列表里，明确标注「暂无准确报价」——
+                // 既不让型号凭空消失（用户会以为没了），也不展示错误价格。
+                val visible = vm.models.filter { it.price != null || it.noMatch }
+                val filtered = if (selectedCat == null) visible else visible.filter { it.cat == selectedCat }
                 PullToRefreshBox(
                     isRefreshing = vm.refreshing,
                     onRefresh = { vm.refresh() },
@@ -346,21 +349,26 @@ private fun HwCard(m: HwModel) {
             Spacer(Modifier.width(12.dp))
             // 价格 + 涨跌（右对齐，留出价格字段位置）
             Column(horizontalAlignment = Alignment.End) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    when (m.trend) {
-                        "up" -> Text("▲", fontSize = 12.sp, color = Theme.Up)
-                        "down" -> Text("▼", fontSize = 12.sp, color = Theme.Down)
-                    }
-                    if (m.trend != "flat") Spacer(Modifier.width(3.dp))
-                    Text(
-                        "¥${priceFmt.format(m.price)}",
-                        fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                        color = when (m.trend) {
-                            "up" -> Theme.Up
-                            "down" -> Theme.Down
-                            else -> Theme.Flat   // 平用中性灰，不再用品牌橙（避免看起来像涨）
+                if (m.noMatch && m.price == null) {
+                    // 搜索不到可精确匹配的单型号商品 → 明确告知，不展示错误价格
+                    Text("暂无准确报价", fontSize = 13.sp, color = Theme.Flat)
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        when (m.trend) {
+                            "up" -> Text("▲", fontSize = 12.sp, color = Theme.Up)
+                            "down" -> Text("▼", fontSize = 12.sp, color = Theme.Down)
                         }
-                    )
+                        if (m.trend != "flat") Spacer(Modifier.width(3.dp))
+                        Text(
+                            "¥${priceFmt.format(m.price)}",
+                            fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                            color = when (m.trend) {
+                                "up" -> Theme.Up
+                                "down" -> Theme.Down
+                                else -> Theme.Flat   // 平用中性灰，不再用品牌橙（避免看起来像涨）
+                            }
+                        )
+                    }
                 }
                 // 上一轮价格
                 m.prevPrice?.let { pp ->
