@@ -571,24 +571,59 @@ fun ArticleDetail(id: String, onBack: () -> Unit) {
 private fun ArticleContent(content: String) {
     val isHtml = content.contains("<") && content.contains(">")
     if (isHtml) {
-        // 公众号 HTML：用 WebView 渲染
-        androidx.compose.ui.viewinterop.AndroidView(
-            factory = { ctx ->
-                android.webkit.WebView(ctx).apply {
-                    settings.javaScriptEnabled = false
-                    settings.loadWithOverviewMode = true
-                    settings.useWideViewPort = true
-                    val html = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'>" +
-                        "<style>img{max-width:100%;height:auto}body{font-size:16px;line-height:1.7;color:#2B2118;margin:0;padding:0}</style></head><body>" +
-                        content + "</body></html>"
-                    loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
-                }
-            },
-            modifier = Modifier.fillMaxWidth().height(android.view.ViewGroup.LayoutParams.WRAP_CONTENT.dp)
-        )
+        HtmlArticle(content)
     } else {
         MarkdownContent(content)
     }
+}
+
+/**
+ * 公众号 HTML 正文渲染。
+ * 关键修复：
+ *  1. 公众号图片用 data-src 懒加载 → 转成 src 才能显示
+ *  2. WebView 高度动态测量（之前用 WRAP_CONTENT.dp = -2dp 导致高度为 0，内容"什么都没显示"）
+ *  3. baseUrl 设为微信域名，绕过 mmbiz.qpic.cn 图片防盗链
+ */
+@Composable
+private fun HtmlArticle(html: String) {
+    var heightPx by remember { mutableStateOf(800) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { ctx ->
+            android.webkit.WebView(ctx).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.loadWithOverviewMode = true
+                settings.useWideViewPort = true
+                settings.blockNetworkImage = false
+                // 禁用 WebView 自身滚动，交给外层 LazyColumn
+                isVerticalScrollBarEnabled = false
+                overScrollMode = android.view.View.OVER_SCROLL_NEVER
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                webViewClient = object : android.webkit.WebViewClient() {
+                    override fun onPageFinished(view: android.webkit.WebView, url: String?) {
+                        // 多次测量：图片加载慢时首次不准，300ms / 1200ms / 2500ms 取最大
+                        listOf(300L, 1200L, 2500L).forEach { delayMs ->
+                            view.postDelayed({
+                                val h = view.contentHeight
+                                if (h > heightPx) heightPx = h
+                            }, delayMs)
+                        }
+                    }
+                }
+                // data-src 懒加载图片 → src
+                val fixed = html.replace("data-src=", "src=")
+                val page = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'>" +
+                    "<style>img{max-width:100%!important;height:auto!important;display:block;margin:8px 0}" +
+                    "body{font-size:16px;line-height:1.8;color:#2B2118;margin:0;padding:0;word-wrap:break-word}" +
+                    "p{margin:0 0 12px}</style></head><body>" + fixed + "</body></html>"
+                // baseUrl 用微信域名，带正确 Referer 绕过图片防盗链
+                loadDataWithBaseURL("https://mp.weixin.qq.com", page, "text/html", "utf-8", null)
+            }
+        },
+        modifier = Modifier.fillMaxWidth().height(with(density) { heightPx.toDp() })
+    )
 }
 
 /** 简易 Markdown 渲染（代码块/链接/图片/粗体/引用/列表/话题） */
