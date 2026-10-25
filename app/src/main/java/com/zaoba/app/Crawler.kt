@@ -170,6 +170,7 @@ object Crawler {
     private const val KEY_DONE_INDEX = "done_index"
     private const val KEY_LAST_ROUND = "last_round_at"
     private const val KEY_ROUND_ID = "round_id"
+    private const val KEY_DONE_KEYS = "done_keys"
 
     fun getDoneIndex(ctx: Context): Int {
         return ctx.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE).getInt(KEY_DONE_INDEX, 0)
@@ -177,6 +178,35 @@ object Crawler {
 
     fun setDoneIndex(ctx: Context, index: Int) {
         ctx.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE).edit().putInt(KEY_DONE_INDEX, index).apply()
+    }
+
+    /**
+     * 本轮「已采型号 key 集合」。
+     *
+     * ★ 为什么不用「采到第几号」的 index：
+     *   型号清单是固定顺序（显卡→笔记本→CPU→固态→内存），内存条永远排在最后 6 个。
+     *   只要一轮中途被打断（换轮/被杀/保护期），index 就回不到 66+，
+     *   结果**内存条永远采不到**（实测 0 条快照、0 条历史）。
+     *   改成记「已采过哪些 key」，每轮从**最久没更新**的型号开始，
+     *   无论中途怎么断，冷门品类都不会被饿死。
+     */
+    fun getDoneKeys(ctx: Context): Set<String> {
+        val raw = ctx.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_DONE_KEYS, "") ?: ""
+        if (raw.isBlank()) return emptySet()
+        return raw.split('\n').filter { it.isNotBlank() }.toSet()
+    }
+
+    fun setDoneKeys(ctx: Context, keys: Set<String>) {
+        ctx.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE).edit()
+            .putString(KEY_DONE_KEYS, keys.joinToString("\n")).apply()
+    }
+
+    fun addDoneKey(ctx: Context, key: String) {
+        if (key.isBlank()) return
+        val s = getDoneKeys(ctx).toMutableSet()
+        s.add(key)
+        setDoneKeys(ctx, s)
     }
 
     /** 本地记录的轮次 ID：服务端 roundId 变了就说明进了新一轮，需要重置进度 */

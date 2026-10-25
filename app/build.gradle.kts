@@ -24,8 +24,8 @@ android {
         applicationId = "com.zaoba.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 60
-        versionName = "1.0.23"
+        versionCode = 61
+        versionName = "1.0.24"
         buildConfigField("String", "CRAWLER_KEY", "\"$crawlerKey\"")
     }
 

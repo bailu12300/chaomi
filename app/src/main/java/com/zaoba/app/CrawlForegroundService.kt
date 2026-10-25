@@ -87,21 +87,23 @@ class CrawlForegroundService : Service() {
 
         val total = models.size
 
-        // ② 换轮检测：服务端的 roundId 变了 → 重置本地进度，新一轮从 0 开始。
-        //    进度由**客户端自己维护**（服务端只管周期约束，不掺和采到第几个），
-        //    这样服务端少一层状态，也不会出现"两边进度互相覆盖"的死锁。
+        // ② 换轮检测：服务端 roundId 变了 → 清空本轮的"已采集合"，新一轮重来。
+        //    进度由**客户端自己维护**（服务端只管周期约束）。
         if (st != null) {
             val lastRound = Crawler.getLastRoundId(ctx)
             if (lastRound != st.roundId) {
+                Crawler.setDoneKeys(ctx, emptySet())
                 Crawler.setDoneIndex(ctx, 0)
                 Crawler.setLastRoundId(ctx, st.roundId)
             }
         }
 
-        var index = Crawler.getDoneIndex(ctx).coerceIn(0, total)
+        // ③ 本轮已采集合 → 决定这一轮还差哪些型号
+        val doneKeys = Crawler.getDoneKeys(ctx)
+        val pending = models.filter { it.key !in doneKeys }
 
-        // ③ 本地已采完 → 等下一轮开始（服务端给 nextRoundInMs）
-        if (index >= total) {
+        // 全部采完 → 等下一轮
+        if (pending.isEmpty()) {
             val waitMs = if (st != null && st.nextRoundInMs > 0) st.nextRoundInMs + 60_000L
                          else 10 * 60 * 1000L
             Crawler.reportProgress(running = false, done = total, total = total, current = "", finished = true)
@@ -110,9 +112,14 @@ class CrawlForegroundService : Service() {
             return
         }
 
-        val model = models[index]
-        Crawler.reportProgress(running = true, done = index, total = total, current = model.model, finished = false)
-        updateNotification("采集中 ${index + 1}/$total · ${model.model}")
+        // ★ 选型号策略：**最久没更新的优先**（updatedAt 升序，0 = 从未采过排最前）。
+        //   这样即使每轮都跑不完，也会轮着把冷门品类（内存条等）补齐，
+        //   而不是永远只采清单最前面那批。
+        val model = pending.minByOrNull { it.updatedAt }!!
+
+        val doneCount = total - pending.size
+        Crawler.reportProgress(running = true, done = doneCount, total = total, current = model.model, finished = false)
+        updateNotification("采集中 ${doneCount + 1}/$total · ${model.model}")
 
         // ④ 抓慢慢买 → 上报
         var needWaitRound = false
@@ -124,11 +131,11 @@ class CrawlForegroundService : Service() {
                 updateNotification("${r.msg} · 等待下一轮")
                 needWaitRound = true
             } else if (r.ok) {
-                // ⑤ 入库成功才推进本地进度（失败下次重试同一型号）
-                Crawler.setDoneIndex(ctx, index + 1)
+                // ⑤ 入库成功 → 记入本轮已采集合（失败下次重试同一型号）
+                Crawler.addDoneKey(ctx, model.key)
             }
         } catch (e: Exception) {
-            // 网络/解析异常：不推进，下次重试同一型号
+            // 网络/解析异常：不记入集合，下次还会优先重试这个型号
         }
 
         if (needWaitRound) {
@@ -137,7 +144,7 @@ class CrawlForegroundService : Service() {
             return
         }
 
-        delay(Crawler.THROTTLE_MS)   // 3 分钟节流
+        delay(Crawler.THROTTLE_MS)   // 100 秒节流
     }
 
     override fun onDestroy() {
