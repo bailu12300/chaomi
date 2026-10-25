@@ -335,7 +335,9 @@ private fun HwCard(m: HwModel) {
             }
 
             // 迷你走势图（一周 14 点，居中）
-            if (m.trends.size >= 2) {
+            // ★ 只要有 1 个价格点就画：单点画一条水平线（= 平），
+            //   刚上架/刚采集的型号也有走势区，避免列表里一块块空白。
+            if (m.trends.isNotEmpty()) {
                 Sparkline(m.trends, m.trend, Modifier.weight(1f))
             } else {
                 Spacer(Modifier.weight(1f))
@@ -356,7 +358,7 @@ private fun HwCard(m: HwModel) {
                         color = when (m.trend) {
                             "up" -> Theme.Up
                             "down" -> Theme.Down
-                            else -> Brand
+                            else -> Theme.Flat   // 平用中性灰，不再用品牌橙（避免看起来像涨）
                         }
                     )
                 }
@@ -376,30 +378,51 @@ private fun HwCard(m: HwModel) {
     }
 }
 
-/** 迷你走势图（sparkline），Canvas 绘制折线 */
+/**
+ * 迷你走势图（sparkline），Canvas 绘制折线。
+ *
+ * 支持 1 个点：画一条贯穿的水平线 + 端点圆点，视觉语义就是「平」（无涨跌）。
+ * 这样刚上架或只有一轮数据的型号也有走势区，不会在列表里留一块空白。
+ */
 @Composable
 private fun Sparkline(points: List<Double>, trend: String, modifier: Modifier = Modifier) {
     val lineColor = when (trend) {
         "up" -> Theme.Up
         "down" -> Theme.Down
-        else -> Brand
+        else -> Theme.Flat
     }
     Canvas(modifier = modifier.height(36.dp)) {
-        if (points.size < 2) return@Canvas
+        if (points.isEmpty()) return@Canvas
+        val h = size.height
+        val w = size.width
         val min = points.minOrNull() ?: 0.0
         val max = points.maxOrNull() ?: 1.0
         val range = (max - min).takeIf { it > 0 } ?: 1.0
-        val stepX = size.width / (points.size - 1)
+        val padY = 2f
+
+        fun yOf(v: Double) = h - ((v - min) / range).toFloat() * (h - padY * 2) - padY
+
+        if (points.size == 1) {
+            // 单点 = 平：画满宽的水平虚线 + 圆点
+            val y = h / 2f
+            drawLine(
+                color = lineColor.copy(alpha = 0.55f),
+                start = Offset(0f, y), end = Offset(w, y),
+                strokeWidth = 2f
+            )
+            drawCircle(color = lineColor, radius = 3f, center = Offset(w / 2f, y))
+            return@Canvas
+        }
+
+        val stepX = w / (points.size - 1)
         val path = Path()
         points.forEachIndexed { i, v ->
             val x = i * stepX
-            val y = size.height - ((v - min) / range).toFloat() * (size.height - 4) - 2
+            val y = yOf(v)
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
         drawPath(path, color = lineColor, style = Stroke(width = 2f))
         // 最后一点画个小圆点
-        val lx = (points.size - 1) * stepX
-        val ly = size.height - ((points.last() - min) / range).toFloat() * (size.height - 4) - 2
-        drawCircle(color = lineColor, radius = 3f, center = Offset(lx, ly))
+        drawCircle(color = lineColor, radius = 3f, center = Offset(w, yOf(points.last())))
     }
 }

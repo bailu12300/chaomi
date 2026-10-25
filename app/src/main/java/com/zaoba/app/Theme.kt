@@ -21,4 +21,6 @@ object Theme {
     // 涨跌（沿用中国股市习惯：涨红跌绿）
     val Up = Color(0xFFE24B4A)
     val Down = Color(0xFF1D9E75)
+    // 平（无涨跌）：中性灰，走势图与价格都用它，避免"平"被误读成涨或跌
+    val Flat = Color(0xFF9E9186)
 }

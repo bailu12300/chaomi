@@ -20,8 +20,8 @@ import java.util.concurrent.TimeUnit
  *      App 端不做解析（慢慢买是 Next.js，DOM 结构随发版变化，解析放服务器更易迭代）。
  *
  * 关键约束（用户要求，写死不可改）：
- *   · 3 分钟/型号（THROTTLE_MS）
- *   · 12 小时一轮
+ *   · 100 秒/型号（THROTTLE_MS）
+ *   · 12 小时一轮（自然周期，服务端约束）
  *   · 断点续传：本地记录进度，被杀后台后重启继续
  */
 object Crawler {
@@ -30,8 +30,8 @@ object Crawler {
     private val CRAWLER_KEY: String = BuildConfig.CRAWLER_KEY
     private const val MM_SEARCH = "https://s.manmanbuy.com/pc/search/result"
 
-    /** 节流：3 分钟/型号（写死） */
-    const val THROTTLE_MS = 3 * 60 * 1000L
+    /** 节流：100 秒/型号（用户定，写死）。72 型号一轮约 2 小时。 */
+    const val THROTTLE_MS = 100 * 1000L
 
     /** 移动端 UA（让慢慢买返回 H5 结构） */
     private const val MOBILE_UA =
