@@ -44,8 +44,17 @@ private val Line = Theme.Line
 private val priceFmt = DecimalFormat("#,###.##")
 
 /** 分类 */
+/**
+ * 品类筛选（对应 /api/hw/models 的 cat 字段）。
+ *
+ * ★ 必须与后端 hw_models.json 的收录范围同步：
+ *   2026-10-25 型号范围收紧为 显卡 RTX4060~5090 + 处理器 Intel12~14代/AMD5600~9800X3D，
+ *   笔记本 / 固态硬盘 / 内存条 已下架 → 这里也要删掉，
+ *   否则用户点进去只会看到空列表。
+ *   范围再调整时，改这里 + 后端 hw_models.json 就够（后端是权威）。
+ */
 private val CATS = listOf(
-    "GPU" to "显卡", "CPU" to "处理器", "SSD" to "固态硬盘", "RAM" to "内存条", "NB" to "笔记本"
+    "GPU" to "显卡", "CPU" to "处理器"
 )
 
 class MainViewModel : ViewModel() {
