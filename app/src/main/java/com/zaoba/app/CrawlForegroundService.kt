@@ -87,16 +87,23 @@ class CrawlForegroundService : Service() {
 
         val total = models.size
 
-        // ② 进度以**服务端为准**（唯一权威）。
-        //    为什么不能先用本地 doneIndex：本地计数在重装/清数据/换版本后会错乱，
-        //    而服务端每轮 recordDoneKeys 是准确账本。服务端没有进度时才退回本地。
-        var index = if (st != null && st.done in 0..total) st.done else Crawler.getDoneIndex(ctx).coerceIn(0, total)
-        Crawler.setDoneIndex(ctx, index)   // 本地仅作离线兜底镜像
+        // ② 换轮检测：服务端的 roundId 变了 → 重置本地进度，新一轮从 0 开始。
+        //    进度由**客户端自己维护**（服务端只管周期约束，不掺和采到第几个），
+        //    这样服务端少一层状态，也不会出现"两边进度互相覆盖"的死锁。
+        if (st != null) {
+            val lastRound = Crawler.getLastRoundId(ctx)
+            if (lastRound != st.roundId) {
+                Crawler.setDoneIndex(ctx, 0)
+                Crawler.setLastRoundId(ctx, st.roundId)
+            }
+        }
 
-        // ③ 本轮已采完 → 等下一轮（服务端窗口结束后再来）
+        var index = Crawler.getDoneIndex(ctx).coerceIn(0, total)
+
+        // ③ 本地已采完 → 等下一轮开始（服务端给 nextRoundInMs）
         if (index >= total) {
             val waitMs = if (st != null && st.nextRoundInMs > 0) st.nextRoundInMs + 60_000L
-                         else Crawler.THROTTLE_MS
+                         else 10 * 60 * 1000L
             Crawler.reportProgress(running = false, done = total, total = total, current = "", finished = true)
             updateNotification("本轮已完成 $total/$total，${waitMs / 60000} 分钟后开始下一轮")
             delay(waitMs)
@@ -107,23 +114,30 @@ class CrawlForegroundService : Service() {
         Crawler.reportProgress(running = true, done = index, total = total, current = model.model, finished = false)
         updateNotification("采集中 ${index + 1}/$total · ${model.model}")
 
-        // ④ 抓慢慢买 → 上报（服务端入库成功后会自动把本轮进度 +1）
+        // ④ 抓慢慢买 → 上报
+        var needWaitRound = false
         try {
             val text = Crawler.fetchManmanbuy(model.keyword)
             val r = Crawler.ingest(model, text)
             if (r.blockedByRound) {
-                // 服务端说该停了（保护期/本轮已采完）→ 直接等，不要重试
-                val waitMs = (st?.nextRoundInMs ?: 0).let { if (it > 0) it + 60_000L else 10 * 60 * 1000L }
+                // 服务端说进入保护期了 → 不推进进度，等下一轮
                 updateNotification("${r.msg} · 等待下一轮")
-                delay(waitMs)
-                return
+                needWaitRound = true
+            } else if (r.ok) {
+                // ⑤ 入库成功才推进本地进度（失败下次重试同一型号）
+                Crawler.setDoneIndex(ctx, index + 1)
             }
         } catch (e: Exception) {
-            // 单型号失败不中断，下一轮循环会重试同一型号（服务端未记账）
+            // 网络/解析异常：不推进，下次重试同一型号
         }
 
-        // ⑤ 3 分钟节流（进度由服务端推进，本地不再自增，避免与服务端不一致）
-        delay(Crawler.THROTTLE_MS)
+        if (needWaitRound) {
+            val waitMs = (st?.nextRoundInMs ?: 0).let { if (it > 0) it + 60_000L else 10 * 60 * 1000L }
+            delay(waitMs)
+            return
+        }
+
+        delay(Crawler.THROTTLE_MS)   // 3 分钟节流
     }
 
     override fun onDestroy() {

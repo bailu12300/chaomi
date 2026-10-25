@@ -115,7 +115,7 @@ object Crawler {
                 CrawlStatus(
                     canCrawlNow = d.optBoolean("canCrawlNow", true),
                     blockReason = d.optString("blockReason"),
-                    roundDone = d.optBoolean("roundDone"),
+                    roundId = d.optString("roundId"),
                     inProtect = d.optBoolean("inProtect"),
                     nextRoundInMs = d.optLong("nextRoundInMs"),
                     roundEndAt = d.optLong("roundEndAt"),
@@ -126,11 +126,11 @@ object Crawler {
         } catch (e: Exception) { null }
     }
 
-    /** 服务端轮次状态 */
+    /** 服务端轮次状态（只表达"能不能采"，不表达"采到第几个"） */
     data class CrawlStatus(
         val canCrawlNow: Boolean,
         val blockReason: String,
-        val roundDone: Boolean,
+        val roundId: String,
         val inProtect: Boolean,
         val nextRoundInMs: Long,
         val roundEndAt: Long,
@@ -169,6 +169,7 @@ object Crawler {
     private const val SP_NAME = "crawler_progress"
     private const val KEY_DONE_INDEX = "done_index"
     private const val KEY_LAST_ROUND = "last_round_at"
+    private const val KEY_ROUND_ID = "round_id"
 
     fun getDoneIndex(ctx: Context): Int {
         return ctx.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE).getInt(KEY_DONE_INDEX, 0)
@@ -176,6 +177,15 @@ object Crawler {
 
     fun setDoneIndex(ctx: Context, index: Int) {
         ctx.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE).edit().putInt(KEY_DONE_INDEX, index).apply()
+    }
+
+    /** 本地记录的轮次 ID：服务端 roundId 变了就说明进了新一轮，需要重置进度 */
+    fun getLastRoundId(ctx: Context): String {
+        return ctx.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE).getString(KEY_ROUND_ID, "") ?: ""
+    }
+
+    fun setLastRoundId(ctx: Context, roundId: String) {
+        ctx.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE).edit().putString(KEY_ROUND_ID, roundId).apply()
     }
 
     fun getLastRoundAt(ctx: Context): Long {
