@@ -3,6 +3,7 @@ package com.zaoba.app
 import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,7 +16,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.AndroidViewModel
@@ -229,7 +235,30 @@ fun PublishForm(token: String, onDone: () -> Unit, onCancel: () -> Unit) {
     var content by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf<String?>(null) }
+    var showEmoji by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+
+    // 图片选择
+    val imgPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            scope.launch {
+                try {
+                    val bytes = ctx.contentResolver.openInputStream(it)?.readBytes()
+                    if (bytes != null) {
+                        val ext = it.lastPathSegment?.substringAfterLast('.', "jpg") ?: "jpg"
+                        val path = "article/${System.currentTimeMillis()}.$ext"
+                        val r = HwApi.uploadImage(token, bytes, path)
+                        if (r.optInt("code") == 0) {
+                            content += "\n![图片](${r.optString("url")})\n"
+                        } else msg = r.optString("msg", "上传失败")
+                    }
+                } catch (e: Exception) { msg = e.message }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
@@ -246,10 +275,35 @@ fun PublishForm(token: String, onDone: () -> Unit, onCancel: () -> Unit) {
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(12.dp))
+
+        // 富文本工具栏
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            ToolBtn("代码") { content += "\n```\n\n```\n" }
+            ToolBtn("链接") { content += "[标题](https://)" }
+            ToolBtn("话题") { content += " #话题# " }
+            ToolBtn("😀") { showEmoji = !showEmoji }
+            ToolBtn("图片") { imgPicker.launch("image/*") }
+            ToolBtn("视频") { content += "\n[视频](视频链接)\n" }
+            ToolBtn("音乐") { content += "\n[音乐](音乐链接)\n" }
+            ToolBtn("引用") { content += "\n> " }
+            ToolBtn("加粗") { content += "**粗体**" }
+            ToolBtn("列表") { content += "\n- " }
+        }
+
+        // 表情选择器
+        if (showEmoji) {
+            Spacer(Modifier.height(8.dp))
+            EmojiPanel { emoji -> content += emoji }
+        }
+
+        Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = content, onValueChange = { content = it },
-            label = { Text("正文内容") },
-            modifier = Modifier.fillMaxWidth().height(260.dp)
+            label = { Text("正文（支持 Markdown）") },
+            modifier = Modifier.fillMaxWidth().height(220.dp)
         )
         Spacer(Modifier.height(16.dp))
         Row {
@@ -273,6 +327,35 @@ fun PublishForm(token: String, onDone: () -> Unit, onCancel: () -> Unit) {
             OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("取消") }
         }
         msg?.let { Text(it, fontSize = 13.sp, color = TextSecondary, modifier = Modifier.padding(top = 12.dp)) }
+    }
+}
+
+/** 工具栏按钮 */
+@Composable
+private fun ToolBtn(label: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        color = CardBg,
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Theme.Line)
+    ) {
+        Text(label, fontSize = 13.sp, color = TextPrimary, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+    }
+}
+
+/** 表情面板（常用 emoji） */
+@Composable
+private fun EmojiPanel(onPick: (String) -> Unit) {
+    val emojis = listOf("😀","😂","🤣","😊","😍","😘","😎","🤔","😅","😭","😡","👍","👎","🙏","💪","👏","🎉","❤️","🔥","💯","⭐","✨","🎁","🌹","🐂","🚀","💰","📈","📉","🛠️","💻","🖥️","🎮")
+    Column(Modifier.fillMaxWidth().background(CardBg, RoundedCornerShape(10.dp)).padding(8.dp)) {
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            emojis.forEach { e ->
+                Text(e, fontSize = 22.sp, modifier = Modifier.clickable { onPick(e) })
+            }
+        }
     }
 }
 
@@ -478,11 +561,108 @@ private fun ArticleContent(content: String) {
             modifier = Modifier.fillMaxWidth().height(android.view.ViewGroup.LayoutParams.WRAP_CONTENT.dp)
         )
     } else {
-        content.split("\n").forEach { para ->
-            if (para.isNotBlank()) {
-                Text(para.trim(), fontSize = 16.sp, color = TextPrimary, lineHeight = 27.sp)
-                Spacer(Modifier.height(12.dp))
+        MarkdownContent(content)
+    }
+}
+
+/** 简易 Markdown 渲染（代码块/链接/图片/粗体/引用/列表/话题） */
+@Composable
+private fun MarkdownContent(content: String) {
+    val lines = content.split("\n")
+    var inCode = false
+    var i = 0
+    Column {
+        while (i < lines.size) {
+            val line = lines[i]
+            when {
+                line.trim().startsWith("```") -> {
+                    if (!inCode) {
+                        inCode = true
+                        // 代码块开始
+                    } else {
+                        inCode = false
+                    }
+                    i++
+                }
+                inCode -> {
+                    // 代码块内容：等宽字体 + 背景
+                    Text(
+                        line,
+                        fontSize = 13.sp, color = TextPrimary,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        modifier = Modifier.fillMaxWidth().background(Theme.Line.copy(alpha = 0.3f), RoundedCornerShape(4.dp)).padding(8.dp)
+                    )
+                    i++
+                }
+                line.trim().startsWith("> ") -> {
+                    // 引用
+                    Text(line.trim().removePrefix("> "), fontSize = 15.sp, color = TextSecondary,
+                        modifier = Modifier.fillMaxWidth().padding(start = 10.dp).background(Theme.Line.copy(alpha = 0.2f), RoundedCornerShape(4.dp)).padding(8.dp))
+                    Spacer(Modifier.height(8.dp))
+                    i++
+                }
+                line.trim().startsWith("- ") -> {
+                    // 列表
+                    Text("• " + line.trim().removePrefix("- "), fontSize = 15.sp, color = TextPrimary, lineHeight = 24.sp)
+                    i++
+                }
+                line.trim().startsWith("![") && line.contains("](") -> {
+                    // 图片 ![alt](url)
+                    val url = line.substringAfter("](", "").substringBefore(")")
+                    if (url.isNotBlank()) {
+                        AsyncImage(url)
+                    }
+                    i++
+                }
+                line.isNotBlank() -> {
+                    RichText(line)
+                    Spacer(Modifier.height(10.dp))
+                    i++
+                }
+                else -> i++
             }
         }
     }
+}
+
+/** 富文本行：话题#标签#、粗体、链接 */
+@Composable
+private fun RichText(line: String) {
+    // 话题 #标签# 高亮
+    val topicRegex = Regex("#([^#\\s]{1,30})#")
+    val linkRegex = Regex("\\[([^\\]]+)\\]\\(([^)]+)\\)")
+    // 简单处理：先渲染话题高亮，粗体，链接用 brand 色
+    // 这里用 buildAnnotatedString 混合样式
+    val annotated = buildAnnotatedString {
+        var idx = 0
+        val combined = Regex("(#([^#\\s]{1,30})#)|(\\[([^\\]]+)\\]\\(([^)]+)\\))|(\\*\\*([^*]+)\\*\\*)")
+        for (m in combined.findAll(line)) {
+            append(line.substring(idx, m.range.first))
+            when {
+                m.groups[2] != null -> withStyle(androidx.compose.ui.text.SpanStyle(color = Brand, fontWeight = FontWeight.SemiBold)) { append(m.value) }
+                m.groups[4] != null -> withStyle(androidx.compose.ui.text.SpanStyle(color = Brand, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) { append(m.groups[4]!!.value) }
+                m.groups[6] != null -> withStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)) { append(m.groups[6]!!.value) }
+            }
+            idx = m.range.last + 1
+        }
+        append(line.substring(idx))
+    }
+    Text(annotated, fontSize = 16.sp, color = TextPrimary, lineHeight = 27.sp)
+}
+
+/** 异步加载图片 */
+@Composable
+private fun AsyncImage(url: String) {
+    // 用 WebView 或 Coil；这里简化为占位 + 链接（不引 Coil 依赖）
+    // 实际用 AndroidView 加载单图
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { ctx ->
+            android.webkit.WebView(ctx).apply {
+                settings.javaScriptEnabled = false
+                loadDataWithBaseURL(null, "<html><body style='margin:0'><img src='$url' style='max-width:100%;height:auto'/></body></html>", "text/html", "utf-8", null)
+            }
+        },
+        modifier = Modifier.fillMaxWidth().height(200.dp)
+    )
+    Spacer(Modifier.height(10.dp))
 }
