@@ -109,8 +109,7 @@ class MainViewModel : ViewModel() {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        CrawlScheduler.schedule(applicationContext)
-        // 强保活：前台服务 + 常驻通知
+        // 采集统一由前台服务内的循环负责（不再用 WorkManager 链，避免被系统清掉后停采）
         CrawlForegroundService.start(applicationContext)
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(
