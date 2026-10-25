@@ -260,6 +260,33 @@ fun PublishForm(token: String, onDone: () -> Unit, onCancel: () -> Unit) {
         }
     }
 
+    // 视频选择（≤1分钟 ≤250MB）
+    val videoPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            scope.launch {
+                try {
+                    val bytes = ctx.contentResolver.openInputStream(it)?.readBytes()
+                    if (bytes != null) {
+                        if (bytes.size > 250 * 1024 * 1024) {
+                            msg = "视频不能超过 250MB"
+                            return@launch
+                        }
+                        val ext = it.lastPathSegment?.substringAfterLast('.', "mp4") ?: "mp4"
+                        val name = "video_${System.currentTimeMillis()}.$ext"
+                        msg = "视频上传中…"
+                        val r = HwApi.uploadVideo(token, bytes, name)
+                        if (r.optInt("code") == 0) {
+                            content += "\n[视频](${r.optString("url")})\n"
+                            msg = null
+                        } else msg = r.optString("msg", "上传失败")
+                    }
+                } catch (e: Exception) { msg = e.message }
+            }
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
     ) {
@@ -286,8 +313,7 @@ fun PublishForm(token: String, onDone: () -> Unit, onCancel: () -> Unit) {
             ToolBtn("话题") { content += " #话题# " }
             ToolBtn("😀") { showEmoji = !showEmoji }
             ToolBtn("图片") { imgPicker.launch("image/*") }
-            ToolBtn("视频") { content += "\n[视频](视频链接)\n" }
-            ToolBtn("音乐") { content += "\n[音乐](音乐链接)\n" }
+            ToolBtn("视频") { videoPicker.launch("video/*") }
             ToolBtn("引用") { content += "\n> " }
             ToolBtn("加粗") { content += "**粗体**" }
             ToolBtn("列表") { content += "\n- " }
@@ -614,6 +640,14 @@ private fun MarkdownContent(content: String) {
                     }
                     i++
                 }
+                line.trim().startsWith("[视频](") && line.contains(")") -> {
+                    // 视频 [视频](url)
+                    val url = line.substringAfter("](", "").substringBefore(")")
+                    if (url.isNotBlank()) {
+                        VideoPlayer(url)
+                    }
+                    i++
+                }
                 line.isNotBlank() -> {
                     RichText(line)
                     Spacer(Modifier.height(10.dp))
@@ -664,5 +698,26 @@ private fun AsyncImage(url: String) {
         },
         modifier = Modifier.fillMaxWidth().height(200.dp)
     )
+    Spacer(Modifier.height(10.dp))
+}
+
+/** 视频播放（成熟方案：Android 原生 VideoView） */
+@Composable
+private fun VideoPlayer(url: String) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val controller = remember { android.widget.MediaController(ctx) }
+    Column(Modifier.fillMaxWidth().background(Color.Black, RoundedCornerShape(8.dp))) {
+        androidx.compose.ui.viewinterop.AndroidView(
+            factory = { c ->
+                android.widget.VideoView(c).apply {
+                    setMediaController(controller)
+                    setVideoPath(url)
+                    setOnPreparedListener { mp -> mp.isLooping = false }
+                    start()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(220.dp)
+        )
+    }
     Spacer(Modifier.height(10.dp))
 }

@@ -267,4 +267,17 @@ object HwApi {
                 JSONObject(resp.body?.string() ?: throw Exception("空响应"))
             }
         }
+
+    /** 上传视频（≤1分钟，≤250MB） */
+    suspend fun uploadVideo(token: String, bytes: ByteArray, name: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder()
+                .url("$BASE_URL/api/upload/media?name=${java.net.URLEncoder.encode(name, "UTF-8")}")
+                .header("X-Session-Token", token)
+                .post(bytes.toRequestBody("application/octet-stream".toMediaType()))
+                .build()
+            client.newCall(req).execute().use { resp ->
+                JSONObject(resp.body?.string() ?: throw Exception("空响应"))
+            }
+        }
 }
