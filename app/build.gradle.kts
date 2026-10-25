@@ -12,8 +12,8 @@ android {
         applicationId = "com.zaoba.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 50
-        versionName = "1.0.13"
+        versionCode = 51
+        versionName = "1.0.14"
     }
 
     buildTypes {
@@ -44,6 +44,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")
+    implementation("androidx.core:core-ktx:1.13.1")
     // 网络 + JSON
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.json:json:20240303")

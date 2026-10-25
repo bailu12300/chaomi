@@ -110,6 +110,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CrawlScheduler.schedule(applicationContext)
+        // 强保活：前台服务 + 常驻通知
+        CrawlForegroundService.start(applicationContext)
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(
                 primary = Brand, background = PageBg, surface = CardBg

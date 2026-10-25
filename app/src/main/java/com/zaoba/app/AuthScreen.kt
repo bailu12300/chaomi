@@ -27,6 +27,7 @@ import org.json.JSONObject
 
 private val PageBg = Theme.PageBg
 private val Brand = Theme.Brand
+private val Brand2 = Theme.Brand2
 private val TextPrimary = Theme.TextPrimary
 private val TextSecondary = Theme.TextSecondary
 private val CardBg = Theme.CardBg
@@ -210,6 +211,25 @@ private fun ProfilePage(vm: AuthViewModel) {
         }
     }
 
+    // 背景选图
+    val backgroundPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            scope.launch {
+                try {
+                    val bytes = ctx.contentResolver.openInputStream(it)?.readBytes()
+                    if (bytes != null) {
+                        val r = HwApi.uploadImage(vm.token, bytes, "background/${vm.user.username}.jpg")
+                        if (r.optInt("code") == 0) {
+                            vm.updateProfile(background = r.optString("url"))
+                        }
+                    }
+                } catch (e: Exception) { vm.showMsg(e.message) }
+            }
+        }
+    }
+
     var editingSignature by remember { mutableStateOf(false) }
     var sigText by remember { mutableStateOf(signature) }
     var editingNickname by remember { mutableStateOf(false) }
@@ -220,6 +240,32 @@ private fun ProfilePage(vm: AuthViewModel) {
     ) {
         Text("我的", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
         Spacer(Modifier.height(20.dp))
+
+        // 个性背景（点击上传）
+        val bgUrl = vm.profile?.optString("background")?.ifBlank { null } ?: ""
+        Box(
+            Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(16.dp))
+                .background(if (bgUrl.isBlank()) Brand2 else Brand2)
+                .clickable { backgroundPicker.launch("image/*") },
+            contentAlignment = Alignment.Center
+        ) {
+            if (bgUrl.isNotBlank()) {
+                // 用 WebView 显示背景图
+                androidx.compose.ui.viewinterop.AndroidView(
+                    factory = { c ->
+                        android.webkit.WebView(c).apply {
+                            settings.javaScriptEnabled = false
+                            loadDataWithBaseURL(null, "<html><body style='margin:0'><img src='$bgUrl' style='width:100%;height:120px;object-fit:cover'/></body></html>", "text/html", "utf-8", null)
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Text("点击设置个性背景", fontSize = 13.sp, color = TextSecondary)
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
 
         // 头像 + 昵称卡片
         Card(
