@@ -3,6 +3,7 @@ package com.zaoba.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -15,7 +16,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -295,7 +301,7 @@ private fun HwCard(m: HwModel) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 型号 + 规格
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1.2f)) {
                 Text(
                     m.model,
                     fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
@@ -307,11 +313,18 @@ private fun HwCard(m: HwModel) {
                     Text(spec, fontSize = 12.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
+
+            // 迷你走势图（一周 14 点，居中）
+            if (m.trends.size >= 2) {
+                Sparkline(m.trends, m.trend, Modifier.weight(1f))
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
+
             Spacer(Modifier.width(12.dp))
-            // 价格 + 涨跌
+            // 价格 + 涨跌（右对齐，留出价格字段位置）
             Column(horizontalAlignment = Alignment.End) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // 涨跌箭头（红涨绿跌，中国习惯）
                     when (m.trend) {
                         "up" -> Text("▲", fontSize = 12.sp, color = Theme.Up)
                         "down" -> Text("▼", fontSize = 12.sp, color = Theme.Down)
@@ -327,6 +340,11 @@ private fun HwCard(m: HwModel) {
                         }
                     )
                 }
+                // 上一轮价格
+                m.prevPrice?.let { pp ->
+                    Spacer(Modifier.height(2.dp))
+                    Text("上轮 ¥${priceFmt.format(pp)}", fontSize = 10.sp, color = TextSecondary)
+                }
                 m.platform?.let {
                     Spacer(Modifier.height(2.dp))
                     Surface(color = Theme.Brand2.copy(alpha = 0.14f), shape = RoundedCornerShape(6.dp)) {
@@ -335,5 +353,33 @@ private fun HwCard(m: HwModel) {
                 }
             }
         }
+    }
+}
+
+/** 迷你走势图（sparkline），Canvas 绘制折线 */
+@Composable
+private fun Sparkline(points: List<Double>, trend: String, modifier: Modifier = Modifier) {
+    val lineColor = when (trend) {
+        "up" -> Theme.Up
+        "down" -> Theme.Down
+        else -> Brand
+    }
+    Canvas(modifier = modifier.height(36.dp)) {
+        if (points.size < 2) return@Canvas
+        val min = points.minOrNull() ?: 0.0
+        val max = points.maxOrNull() ?: 1.0
+        val range = (max - min).takeIf { it > 0 } ?: 1.0
+        val stepX = size.width / (points.size - 1)
+        val path = Path()
+        points.forEachIndexed { i, v ->
+            val x = i * stepX
+            val y = size.height - ((v - min) / range).toFloat() * (size.height - 4) - 2
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        drawPath(path, color = lineColor, style = Stroke(width = 2f))
+        // 最后一点画个小圆点
+        val lx = (points.size - 1) * stepX
+        val ly = size.height - ((points.last() - min) / range).toFloat() * (size.height - 4) - 2
+        drawCircle(color = lineColor, radius = 3f, center = Offset(lx, ly))
     }
 }

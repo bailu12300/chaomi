@@ -17,12 +17,15 @@ data class HwModel(
     val price: Double?,
     val platform: String?,
     val trend: String = "flat",
-    val prevPrice: Double? = null
+    val prevPrice: Double? = null,
+    val trends: List<Double> = emptyList()
 ) {
     companion object {
         fun fromJson(o: JSONObject): HwModel {
             val p = if (o.isNull("price")) null else o.optDouble("price")
             val pp = if (o.isNull("prevPrice")) null else o.optDouble("prevPrice")
+            val ta = o.optJSONArray("trends")
+            val trends = if (ta == null) emptyList() else (0 until ta.length()).map { ta.optDouble(it) }
             return HwModel(
                 key = o.optString("key"),
                 cat = o.optString("cat"),
@@ -34,7 +37,8 @@ data class HwModel(
                 price = p,
                 platform = o.optString("platform").ifBlank { null },
                 trend = o.optString("trend", "flat"),
-                prevPrice = pp
+                prevPrice = pp,
+                trends = trends
             )
         }
     }
