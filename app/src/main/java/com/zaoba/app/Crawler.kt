@@ -71,9 +71,17 @@ object Crawler {
         }
     }
 
-    /** 上报采集结果（服务器解析） */
-    suspend fun ingest(model: HwModel, text: String): Boolean = withContext(Dispatchers.IO) {
-        if (text.isBlank()) return@withContext false
+    /**
+     * 上报采集结果（服务器解析）。
+     *
+     * ★ X-Client-App 头：服务端靠它识别「这是手机 App」，本机脚本/浏览器一律 403。
+     *   业务铁律：只有手机 App 用手机 IP 采集，服务器/本机脚本不参与采集。
+     *
+     * 返回 IngestResult：区分成功 / 被轮次拦下（保护期、本轮已采完）/ 其他失败，
+     * 让上层循环能正确处理（被拦下应停下等待，而不是当作失败继续刷）。
+     */
+    suspend fun ingest(model: HwModel, text: String): IngestResult = withContext(Dispatchers.IO) {
+        if (text.isBlank()) return@withContext IngestResult(false, -1, "空内容")
         val body = JSONObject()
             .put("modelKey", model.key)
             .put("keyword", model.keyword)
@@ -84,12 +92,56 @@ object Crawler {
         val req = Request.Builder()
             .url("$BASE/api/hw/ingest")
             .header("X-Crawler-Key", CRAWLER_KEY)
+            .header("X-Client-App", "zaoba/" + BuildConfig.VERSION_NAME)
             .post(body)
             .build()
         client.newCall(req).execute().use { resp ->
             val r = JSONObject(resp.body?.string() ?: "")
-            r.optInt("code") == 0
+            val code = r.optInt("code")
+            IngestResult(code == 0, code, r.optString("msg"))
         }
+    }
+
+    /**
+     * 查询服务端状态（轮次窗口 / 是否可采）。
+     * 采集前必须先问一次 —— 节奏由服务端说了算，客户端杀进程重启也绕不过去。
+     */
+    suspend fun fetchStatus(): CrawlStatus? = withContext(Dispatchers.IO) {
+        try {
+            val req = Request.Builder().url("$BASE/api/hw/status").get().build()
+            client.newCall(req).execute().use { resp ->
+                val root = JSONObject(resp.body?.string() ?: "")
+                val d = root.optJSONObject("data") ?: return@withContext null
+                CrawlStatus(
+                    canCrawlNow = d.optBoolean("canCrawlNow", true),
+                    blockReason = d.optString("blockReason"),
+                    roundDone = d.optBoolean("roundDone"),
+                    inProtect = d.optBoolean("inProtect"),
+                    nextRoundInMs = d.optLong("nextRoundInMs"),
+                    roundEndAt = d.optLong("roundEndAt"),
+                    total = d.optInt("total"),
+                    done = d.optInt("done")
+                )
+            }
+        } catch (e: Exception) { null }
+    }
+
+    /** 服务端轮次状态 */
+    data class CrawlStatus(
+        val canCrawlNow: Boolean,
+        val blockReason: String,
+        val roundDone: Boolean,
+        val inProtect: Boolean,
+        val nextRoundInMs: Long,
+        val roundEndAt: Long,
+        val total: Int,
+        val done: Int
+    )
+
+    /** 上报结果 */
+    data class IngestResult(val ok: Boolean, val code: Int, val msg: String) {
+        /** 被轮次规则拦下（保护期 4002 / 本轮已采完 4003），应停下等待而非重试 */
+        val blockedByRound: Boolean get() = code == 4002 || code == 4003
     }
 
     /** 上报进度 */

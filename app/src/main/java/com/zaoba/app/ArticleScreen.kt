@@ -17,9 +17,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -227,17 +229,60 @@ fun ImportWechatDialog(token: String, onDone: () -> Unit, onCancel: () -> Unit) 
     }
 }
 
-/** 发布表单 */
+/**
+ * 文章编辑器（新建 / 编辑共用）。
+ *
+ * @param editId 非空 = 编辑已有文章；null = 新建
+ *
+ * 相较早期版本的改进：
+ *   · 工具栏插入**光标位置**（早期是追加到末尾，改一句话要手动挪光标）
+ *   · 支持编辑已有文章（作者本人/管理员）
+ *   · 预览模式：边写边看 Markdown 渲染效果
+ *   · 字数统计 + 未保存提示
+ */
 @Composable
-fun PublishForm(token: String, onDone: () -> Unit, onCancel: () -> Unit) {
-    var title by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("资讯") }
-    var content by remember { mutableStateOf("") }
+fun PublishForm(
+    token: String,
+    onDone: () -> Unit,
+    onCancel: () -> Unit,
+    editId: String? = null,
+    initialTitle: String = "",
+    initialContent: String = "",
+    initialCategory: String = ""
+) {
+    val isEdit = !editId.isNullOrBlank()
+    var title by remember { mutableStateOf(initialTitle) }
+    var category by remember { mutableStateOf(initialCategory.ifBlank { "资讯" }) }
+    // 用 TextFieldValue 才能拿到光标位置，实现「插入到光标处」
+    var body by remember { mutableStateOf(TextFieldValue(initialContent)) }
     var busy by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf<String?>(null) }
     var showEmoji by remember { mutableStateOf(false) }
+    var preview by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current
+
+    /** 在光标处插入文本；若当前有选中内容则替换 */
+    fun insert(text: String) {
+        val sel = body.selection
+        val newText = body.text.substring(0, sel.start) + text + body.text.substring(sel.end)
+        body = TextFieldValue(
+            text = newText,
+            selection = TextRange(sel.start + text.length)
+        )
+    }
+
+    /** 用整段包裹选中内容（如加粗、行内代码）；无选中则插入占位 */
+    fun wrap(prefix: String, suffix: String, placeholder: String) {
+        val sel = body.selection
+        val selected = body.text.substring(sel.start, sel.end)
+        val inner = if (selected.isBlank()) placeholder else selected
+        val newText = body.text.substring(0, sel.start) + prefix + inner + suffix + body.text.substring(sel.end)
+        body = TextFieldValue(
+            text = newText,
+            selection = TextRange(sel.start + prefix.length, sel.start + prefix.length + inner.length)
+        )
+    }
 
     // 图片选择
     val imgPicker = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -250,9 +295,11 @@ fun PublishForm(token: String, onDone: () -> Unit, onCancel: () -> Unit) {
                     if (bytes != null) {
                         val ext = it.lastPathSegment?.substringAfterLast('.', "jpg") ?: "jpg"
                         val path = "article/${System.currentTimeMillis()}.$ext"
+                        msg = "图片上传中…"
                         val r = HwApi.uploadImage(token, bytes, path)
                         if (r.optInt("code") == 0) {
-                            content += "\n![图片](${r.optString("url")})\n"
+                            insert("\n![图片](${r.optString("url")})\n")
+                            msg = null
                         } else msg = r.optString("msg", "上传失败")
                     }
                 } catch (e: Exception) { msg = e.message }
@@ -278,7 +325,7 @@ fun PublishForm(token: String, onDone: () -> Unit, onCancel: () -> Unit) {
                         msg = "视频上传中…"
                         val r = HwApi.uploadVideo(token, bytes, name)
                         if (r.optInt("code") == 0) {
-                            content += "\n[视频](${r.optString("url")})\n"
+                            insert("\n[视频](${r.optString("url")})\n")
                             msg = null
                         } else msg = r.optString("msg", "上传失败")
                     }
@@ -287,70 +334,148 @@ fun PublishForm(token: String, onDone: () -> Unit, onCancel: () -> Unit) {
         }
     }
 
+    // 未保存提示
+    val dirty = title != initialTitle || body.text != initialContent || category != (initialCategory.ifBlank { "资讯" })
+
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
     ) {
-        OutlinedTextField(
-            value = title, onValueChange = { title = it },
-            label = { Text("标题") }, singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(
-            value = category, onValueChange = { category = it },
-            label = { Text("分类") }, singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(12.dp))
-
-        // 富文本工具栏
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            ToolBtn("代码") { content += "\n```\n\n```\n" }
-            ToolBtn("链接") { content += "[标题](https://)" }
-            ToolBtn("话题") { content += " #话题# " }
-            ToolBtn("😀") { showEmoji = !showEmoji }
-            ToolBtn("图片") { imgPicker.launch("image/*") }
-            ToolBtn("视频") { videoPicker.launch("video/*") }
-            ToolBtn("引用") { content += "\n> " }
-            ToolBtn("加粗") { content += "**粗体**" }
-            ToolBtn("列表") { content += "\n- " }
+        // 顶部：模式标题 + 预览切换
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (isEdit) "编辑文章" else "发布文章",
+                fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary
+            )
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = { preview = !preview }) {
+                Text(if (preview) "继续编辑" else "预览", color = Brand, fontSize = 13.sp)
+            }
         }
-
-        // 表情选择器
-        if (showEmoji) {
-            Spacer(Modifier.height(8.dp))
-            EmojiPanel { emoji -> content += emoji }
-        }
-
         Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = content, onValueChange = { content = it },
-            label = { Text("正文（支持 Markdown）") },
-            modifier = Modifier.fillMaxWidth().height(220.dp)
-        )
+
+        if (!preview) {
+            OutlinedTextField(
+                value = title, onValueChange = { if (it.length <= 100) title = it },
+                label = { Text("标题") }, singleLine = true,
+                supportingText = { Text("${title.length}/100", fontSize = 11.sp, color = TextSecondary) },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            // 分类快捷选择
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf("资讯", "显卡", "CPU", "笔记本", "固态硬盘", "内存条", "评测").forEach { c ->
+                    val on = category == c
+                    Surface(
+                        onClick = { category = c },
+                        color = if (on) Brand else CardBg,
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (on) Brand else Theme.Line)
+                    ) {
+                        Text(
+                            c, fontSize = 12.sp,
+                            color = if (on) Color.White else TextPrimary,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+
+            // 富文本工具栏
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                ToolBtn("加粗") { wrap("**", "**", "粗体") }
+                ToolBtn("行内码") { wrap("`", "`", "code") }
+                ToolBtn("代码块") { insert("\n```\n\n```\n") }
+                ToolBtn("链接") { insert("[标题](https://)") }
+                ToolBtn("话题") { insert(" #话题# ") }
+                ToolBtn("😀") { showEmoji = !showEmoji }
+                ToolBtn("图片") { imgPicker.launch("image/*") }
+                ToolBtn("视频") { videoPicker.launch("video/*") }
+                ToolBtn("引用") { insert("\n> ") }
+                ToolBtn("列表") { insert("\n- ") }
+                ToolBtn("标题") { insert("\n## ") }
+                ToolBtn("分割线") { insert("\n\n---\n\n") }
+            }
+
+            // 表情选择器
+            if (showEmoji) {
+                Spacer(Modifier.height(8.dp))
+                EmojiPanel { emoji -> insert(emoji) }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = body, onValueChange = { body = it },
+                label = { Text("正文（支持 Markdown）") },
+                supportingText = {
+                    Text("${body.text.length} 字", fontSize = 11.sp, color = TextSecondary)
+                },
+                modifier = Modifier.fillMaxWidth().height(300.dp)
+            )
+        } else {
+            // 预览：直接复用详情页的渲染器
+            Surface(
+                color = CardBg, shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    if (title.isNotBlank()) {
+                        Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Spacer(Modifier.height(10.dp))
+                    }
+                    if (body.text.isBlank()) {
+                        Text("（还没有内容）", fontSize = 14.sp, color = TextSecondary)
+                    } else {
+                        MarkdownContent(body.text)
+                    }
+                }
+            }
+        }
+
         Spacer(Modifier.height(16.dp))
         Row {
             Button(
                 onClick = {
-                    busy = true
+                    busy = true; msg = null
                     scope.launch {
                         try {
-                            val r = HwApi.articleCreate(token, title.trim(), content.trim(), category.trim())
+                            val r = if (isEdit) {
+                                HwApi.articleUpdate(token, editId!!, title.trim(), body.text.trim(), category.trim())
+                            } else {
+                                HwApi.articleCreate(token, title.trim(), body.text.trim(), category.trim())
+                            }
                             if (r.optInt("code") == 0) { onDone() }
-                            else { msg = r.optString("msg", "发布失败") }
+                            else { msg = r.optString("msg", if (isEdit) "保存失败" else "发布失败") }
                         } catch (e: Exception) { msg = e.message }
                         finally { busy = false }
                     }
                 },
-                enabled = !busy && title.isNotBlank() && content.isNotBlank(),
+                enabled = !busy && title.isNotBlank() && body.text.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = Brand),
                 modifier = Modifier.weight(1f)
-            ) { Text(if (busy) "发布中…" else "发布", fontSize = 16.sp) }
+            ) {
+                Text(
+                    when {
+                        busy && isEdit -> "保存中…"
+                        busy -> "发布中…"
+                        isEdit -> "保存修改"
+                        else -> "发布"
+                    },
+                    fontSize = 16.sp
+                )
+            }
             Spacer(Modifier.width(10.dp))
             OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("取消") }
+        }
+        if (dirty) {
+            Spacer(Modifier.height(8.dp))
+            Text("有未保存的修改", fontSize = 11.sp, color = Theme.Up)
         }
         msg?.let { Text(it, fontSize = 13.sp, color = TextSecondary, modifier = Modifier.padding(top = 12.dp)) }
     }
@@ -401,13 +526,20 @@ fun ArticleDetail(id: String, onBack: () -> Unit) {
     var likeTotal by remember { mutableStateOf(0) }
     var liked by remember { mutableStateOf(false) }
     var commentText by remember { mutableStateOf("") }
+    // 编辑/删除
+    var canEdit by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var reloadKey by remember { mutableStateOf(0) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val user = remember { Session.load(ctx) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(id) {
+    LaunchedEffect(id, reloadKey) {
+        loading = true
         try {
-            val r = HwApi.articleDetail(id)
+            // 带 token 才能拿到 canEdit（作者本人/管理员）
+            val r = HwApi.articleDetail(id, user.token.takeIf { user.isLoggedIn })
             val d = r.optJSONObject("data")
             if (d != null) {
                 title = d.optString("title")
@@ -417,6 +549,7 @@ fun ArticleDetail(id: String, onBack: () -> Unit) {
                 viewCount = d.optInt("viewCount")
                 createdAt = d.optLong("createdAt")
                 sourceUrl = d.optString("sourceUrl")
+                canEdit = d.optBoolean("canEdit")
                 val ta = d.optJSONArray("tags")
                 tags = if (ta == null) emptyList() else (0 until ta.length()).map { ta.optString(it) }
             }
@@ -430,6 +563,45 @@ fun ArticleDetail(id: String, onBack: () -> Unit) {
         } catch (e: Exception) {}
     }
 
+    // 编辑模式：直接复用编辑器（编辑成功或取消都回到详情）
+    if (editing) {
+        Column(Modifier.fillMaxSize().background(PageBg).statusBarsPadding()) {
+            PublishForm(
+                token = user.token,
+                onDone = { editing = false; reloadKey++ },
+                onCancel = { editing = false },
+                editId = id,
+                initialTitle = title,
+                initialContent = content,
+                initialCategory = category
+            )
+        }
+        return
+    }
+
+    // 删除确认
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("删除文章") },
+            text = { Text("确定删除《$title》？删除后其他人将无法查看。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    scope.launch {
+                        try {
+                            val r = HwApi.articleDelete(user.token, id)
+                            if (r.optInt("code") == 0) onBack()
+                        } catch (e: Exception) {}
+                    }
+                }) { Text("删除", color = Theme.Up) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text("取消") }
+            }
+        )
+    }
+
     Column(Modifier.fillMaxSize().background(PageBg).statusBarsPadding()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
@@ -439,6 +611,11 @@ fun ArticleDetail(id: String, onBack: () -> Unit) {
             Spacer(Modifier.weight(1f))
             if (sourceUrl.isNotBlank()) {
                 TextButton(onClick = { /* 打开原文浏览器 */ }) { Text("原文", color = Brand) }
+            }
+            // 作者本人/管理员：编辑 + 删除
+            if (canEdit) {
+                TextButton(onClick = { editing = true }) { Text("编辑", color = Brand) }
+                TextButton(onClick = { confirmDelete = true }) { Text("删除", color = Theme.Up) }
             }
         }
         if (loading) {

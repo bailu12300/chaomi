@@ -146,12 +146,12 @@ object HwApi {
         }
     }
 
-    /** 文章详情 */
-    suspend fun articleDetail(id: String): JSONObject = withContext(Dispatchers.IO) {
-        val req = Request.Builder()
+    /** 文章详情（带 token 时返回 canEdit，用于显示编辑/删除入口） */
+    suspend fun articleDetail(id: String, token: String? = null): JSONObject = withContext(Dispatchers.IO) {
+        val b = Request.Builder()
             .url("$BASE_URL/api/article/detail?id=${java.net.URLEncoder.encode(id, "UTF-8")}")
-            .get().build()
-        client.newCall(req).execute().use { resp ->
+        if (!token.isNullOrBlank()) b.header("X-Session-Token", token)
+        client.newCall(b.get().build()).execute().use { resp ->
             JSONObject(resp.body?.string() ?: throw Exception("空响应"))
         }
     }
@@ -173,6 +173,51 @@ object HwApi {
                 JSONObject(resp.body?.string() ?: throw Exception("空响应"))
             }
         }
+
+    /** 编辑文章（仅作者本人/管理员） */
+    suspend fun articleUpdate(
+        token: String, id: String, title: String, content: String, category: String
+    ): JSONObject = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("id", id)
+            .put("title", title)
+            .put("content", content)
+            .put("category", category)
+            .toString().toRequestBody("application/json".toMediaType())
+        val req = Request.Builder()
+            .url("$BASE_URL/api/article/update")
+            .header("X-Session-Token", token)
+            .post(body)
+            .build()
+        client.newCall(req).execute().use { resp ->
+            JSONObject(resp.body?.string() ?: throw Exception("空响应"))
+        }
+    }
+
+    /** 删除文章（仅作者本人/管理员，软删除） */
+    suspend fun articleDelete(token: String, id: String): JSONObject = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("id", id)
+            .toString().toRequestBody("application/json".toMediaType())
+        val req = Request.Builder()
+            .url("$BASE_URL/api/article/delete")
+            .header("X-Session-Token", token)
+            .post(body)
+            .build()
+        client.newCall(req).execute().use { resp ->
+            JSONObject(resp.body?.string() ?: throw Exception("空响应"))
+        }
+    }
+
+    /** 我的文章 */
+    suspend fun articleMine(token: String, page: Int = 1): JSONObject = withContext(Dispatchers.IO) {
+        val req = Request.Builder()
+            .url("$BASE_URL/api/article/mine?page=$page&size=20")
+            .header("X-Session-Token", token)
+            .get().build()
+        client.newCall(req).execute().use { resp ->
+            JSONObject(resp.body?.string() ?: throw Exception("空响应"))
+        }
+    }
 
     // ---------- 评论 + 点赞 ----------
 

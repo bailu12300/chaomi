@@ -65,37 +65,68 @@ class CrawlForegroundService : Service() {
 
     private suspend fun crawlOne() {
         val ctx = applicationContext
+
+        // ① 先问服务端：现在允许采吗？（轮次窗口 / 保护期 / 本轮是否已采完）
+        //    节奏由服务端强管控，本地只负责执行 —— 这样杀进程重启也绕不过节流。
+        val st = Crawler.fetchStatus()
+        if (st != null && !st.canCrawlNow) {
+            val waitMs = when {
+                st.nextRoundInMs > 0 -> st.nextRoundInMs + 60_000L   // 等到下一轮开始（+1分钟缓冲）
+                else -> 5 * 60 * 1000L
+            }
+            val mins = waitMs / 60000
+            val why = st.blockReason.ifBlank { if (st.inProtect) "保护期" else "等待下一轮" }
+            updateNotification("$why · ${mins} 分钟后继续")
+            Crawler.reportProgress(running = false, done = st.done, total = st.total, current = "", finished = false)
+            delay(waitMs)
+            return
+        }
+
         val models = Crawler.fetchModels().filter { it.keyword.isNotBlank() }
         if (models.isEmpty()) { delay(60_000); return }
 
         val total = models.size
-        val index = Crawler.getDoneIndex(ctx).coerceIn(0, total)
+        var index = Crawler.getDoneIndex(ctx).coerceIn(0, total)
 
-        // 一轮采完 → 重置断点，等下一轮
+        // ② 与服务端进度对齐：服务端是权威（本地可能因重装/清数据落后）
+        if (st != null && st.total > 0 && st.total == total && st.done != index) {
+            index = st.done.coerceIn(0, total)
+            Crawler.setDoneIndex(ctx, index)
+        }
+
+        // ③ 本地已采完 → 等下一轮（服务端窗口结束后再来）
         if (index >= total) {
-            Crawler.setDoneIndex(ctx, 0)
-            Crawler.setLastRoundAt(ctx, System.currentTimeMillis())
+            val waitMs = if (st != null && st.nextRoundInMs > 0) st.nextRoundInMs + 60_000L
+                         else Crawler.THROTTLE_MS
             Crawler.reportProgress(running = false, done = total, total = total, current = "", finished = true)
-            updateNotification("本轮已完成 $total/$total，等待下一轮")
-            delay(12 * 60 * 60 * 1000L)
+            updateNotification("本轮已完成 $total/$total，${waitMs / 60000} 分钟后开始下一轮")
+            delay(waitMs)
+            Crawler.setDoneIndex(ctx, 0)
             return
         }
 
         val model = models[index]
         Crawler.reportProgress(running = true, done = index, total = total, current = model.model, finished = false)
-        updateNotification("采集中 $index/$total · ${model.model}")
+        updateNotification("采集中 ${index + 1}/$total · ${model.model}")
 
+        // ④ 抓慢慢买 → 上报
         try {
             val text = Crawler.fetchManmanbuy(model.keyword)
-            Crawler.ingest(model, text)
+            val r = Crawler.ingest(model, text)
+            if (r.blockedByRound) {
+                // 服务端说该停了（保护期/本轮已采完）→ 不推进断点，直接等
+                val waitMs = (st?.nextRoundInMs ?: 0).let { if (it > 0) it + 60_000L else 10 * 60 * 1000L }
+                updateNotification("${r.msg} · 等待下一轮")
+                delay(waitMs)
+                return
+            }
         } catch (e: Exception) {
-            // 单型号失败不中断
+            // 单型号失败不中断，继续下一个
         }
 
-        // 推进断点（成败都推进，避免卡死同一型号）
+        // ⑤ 推进断点并等待 3 分钟
         Crawler.setDoneIndex(ctx, index + 1)
-
-        delay(Crawler.THROTTLE_MS)  // 3 分钟节流
+        delay(Crawler.THROTTLE_MS)
     }
 
     override fun onDestroy() {
