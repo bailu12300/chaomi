@@ -26,7 +26,8 @@ import java.util.concurrent.TimeUnit
  */
 object Crawler {
     private const val BASE = "https://zaoba.zy1080.xyz"
-    private const val CRAWLER_KEY = "kMzV3ja0d2iKpHwFBpk3m7h24Kj1L86j"
+    // 采集密钥从 local.properties 注入（不硬编码，避免公开仓库泄露）
+    private val CRAWLER_KEY: String = BuildConfig.CRAWLER_KEY
     private const val MM_SEARCH = "https://s.manmanbuy.com/pc/search/result"
 
     /** 节流：3 分钟/型号（写死） */

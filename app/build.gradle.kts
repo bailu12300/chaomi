@@ -1,7 +1,19 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+// 从 local.properties 读取采集密钥（不提交到仓库，避免公开仓库泄露）
+val crawlerKey: String = run {
+    val f = rootProject.file("local.properties")
+    if (!f.exists()) return@run ""
+    val p = Properties()
+    FileInputStream(f).use { p.load(it) }
+    p.getProperty("CRAWLER_KEY") ?: ""
 }
 
 android {
@@ -12,8 +24,9 @@ android {
         applicationId = "com.zaoba.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 52
-        versionName = "1.0.15"
+        versionCode = 53
+        versionName = "1.0.16"
+        buildConfigField("String", "CRAWLER_KEY", "\"$crawlerKey\"")
     }
 
     buildTypes {
@@ -34,6 +47,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
