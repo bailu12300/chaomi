@@ -226,4 +226,45 @@ object HwApi {
             JSONObject(resp.body?.string() ?: throw Exception("空响应"))
         }
     }
+
+    // ---------- 用户资料 ----------
+
+    /** 获取用户资料 */
+    suspend fun getProfile(token: String): JSONObject = withContext(Dispatchers.IO) {
+        val req = Request.Builder().url("$BASE_URL/api/user/profile")
+            .header("X-Session-Token", token).get().build()
+        client.newCall(req).execute().use { resp ->
+            JSONObject(resp.body?.string() ?: throw Exception("空响应"))
+        }
+    }
+
+    /** 更新用户资料 */
+    suspend fun updateProfile(token: String, nickname: String?, avatar: String?, signature: String?, background: String?): JSONObject =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+            if (nickname != null) body.put("nickname", nickname)
+            if (avatar != null) body.put("avatar", avatar)
+            if (signature != null) body.put("signature", signature)
+            if (background != null) body.put("background", background)
+            val req = Request.Builder().url("$BASE_URL/api/user/profile")
+                .header("X-Session-Token", token)
+                .post(body.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            client.newCall(req).execute().use { resp ->
+                JSONObject(resp.body?.string() ?: throw Exception("空响应"))
+            }
+        }
+
+    /** 上传图片（头像等） */
+    suspend fun uploadImage(token: String, bytes: ByteArray, path: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder()
+                .url("$BASE_URL/api/upload?path=${java.net.URLEncoder.encode(path, "UTF-8")}")
+                .header("X-Session-Token", token)
+                .post(bytes.toRequestBody("application/octet-stream".toMediaType()))
+                .build()
+            client.newCall(req).execute().use { resp ->
+                JSONObject(resp.body?.string() ?: throw Exception("空响应"))
+            }
+        }
 }
