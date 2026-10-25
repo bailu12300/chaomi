@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +60,7 @@ class MainViewModel : ViewModel() {
     var crawlTotal by mutableStateOf(0); private set
     var crawlCurrent by mutableStateOf(""); private set
     var lastDoneAt by mutableStateOf(0L); private set
+    var refreshing by mutableStateOf(false); private set
 
     init { load(); startPolling() }
 
@@ -77,6 +79,16 @@ class MainViewModel : ViewModel() {
             try { models = HwApi.fetchModels() }
             catch (e: Exception) { error = e.message ?: "加载失败" }
             finally { loading = false }
+        }
+    }
+
+    /** 下拉刷新（不显示全屏 loading） */
+    fun refresh() {
+        viewModelScope.launch {
+            refreshing = true; error = null
+            try { models = HwApi.fetchModels() }
+            catch (e: Exception) { error = e.message ?: "加载失败" }
+            finally { refreshing = false }
         }
     }
 
@@ -145,6 +157,7 @@ fun AppRoot() {
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun HwScreen(vm: MainViewModel = viewModel()) {
     var selectedCat by remember { mutableStateOf<String?>(null) }  // null = 全部
@@ -164,7 +177,13 @@ fun HwScreen(vm: MainViewModel = viewModel()) {
             else -> {
                 val priced = vm.models.filter { it.price != null }
                 val filtered = if (selectedCat == null) priced else priced.filter { it.cat == selectedCat }
-                HwList(filtered)
+                PullToRefreshBox(
+                    isRefreshing = vm.refreshing,
+                    onRefresh = { vm.refresh() },
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    HwList(filtered)
+                }
             }
         }
     }
