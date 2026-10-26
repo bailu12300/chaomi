@@ -112,6 +112,8 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         btnAccount.setOnClickListener(v -> onAccountClick());
         findViewById(R.id.btnAdSkip).setOnClickListener(v ->
                 startActivity(new Intent(this, AdSkipActivity.class)));
+        findViewById(R.id.btnNode).setOnClickListener(v ->
+                startActivity(new Intent(this, NodeActivity.class)));
 
         fLatest.setOnClickListener(v -> { feedSort = ""; feedMine = false; loadFeed(); });
         fHot.setOnClickListener(v -> { feedSort = "hot"; feedMine = false; loadFeed(); });

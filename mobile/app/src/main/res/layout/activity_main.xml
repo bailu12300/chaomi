@@ -55,6 +55,20 @@
             android:textSize="12sp" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnNode"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:insetLeft="0dp"
+            android:insetRight="0dp"
+            android:minWidth="0dp"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:text="节点"
+            android:textColor="@color/chaomi_text_dim"
+            android:textSize="12sp" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAdSkip"
             style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"

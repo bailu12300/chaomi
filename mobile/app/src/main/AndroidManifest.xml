@@ -61,6 +61,11 @@
             android:exported="false"
             android:parentActivityName=".MainActivity" />
 
+        <activity
+            android:name=".NodeActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+
         <!-- 无障碍服务：识别「跳过/关闭」并模拟点击（同李跳跳思路） -->
         <service
             android:name=".SkipAdService"

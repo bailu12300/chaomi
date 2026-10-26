@@ -202,6 +202,36 @@ public class Api {
         return gson.fromJson(gson.toJson(root.get("data")), Article.class);
     }
 
+    // ---------- 节点监控 ----------
+
+    /** 打一次心跳，返回服务端处理耗时（毫秒）。失败抛异常。 */
+    public static long pingOnce() throws Exception {
+        long t0 = System.currentTimeMillis();
+        String json = get(BASE + "/api/ping?t=" + t0);
+        Map<String, Object> root = gson.fromJson(json, Map.class);
+        if (root == null) return -1;
+        Object data = root.get("data");
+        if (!(data instanceof Map)) return -1;
+        Object cost = ((Map<String, Object>) data).get("costMs");
+        return cost instanceof Number ? ((Number) cost).longValue() : 0;
+    }
+
+    /** 回传实测延迟，供服务端统计 */
+    public static void pingReport(int rtt) throws Exception {
+        Map<String, Object> b = new LinkedHashMap<>();
+        b.put("rtt", rtt);
+        post(BASE + "/api/ping/report", gson.toJson(b));
+    }
+
+    /** 节点信息（区域/负载/心跳统计） */
+    public static Map<String, Object> nodeInfo() throws Exception {
+        String json = get(BASE + "/api/node");
+        Map<String, Object> root = gson.fromJson(json, Map.class);
+        if (root == null || err(root) != null) throw new Exception("节点信息获取失败");
+        Object d = root.get("data");
+        return d instanceof Map ? (Map<String, Object>) d : new LinkedHashMap<>();
+    }
+
     // ---------- 硬件行情 ----------
 
     public static List<HwModel> hwModels() throws Exception {

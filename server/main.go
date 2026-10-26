@@ -3109,6 +3109,11 @@ func doServe() error {
 	})
 	mux.HandleFunc("/api/article/parse", func(w http.ResponseWriter, r *http.Request) { handleArticleParse(w, r) })
 
+	// ---- 节点监控 ----
+	mux.HandleFunc("/api/ping", handlePing)
+	mux.HandleFunc("/api/ping/report", handlePingReport)
+	mux.HandleFunc("/api/node", func(w http.ResponseWriter, r *http.Request) { handleNodeInfo(db, w, r) })
+
 	// ---- 账号体系 ----
 	mux.HandleFunc("/api/auth/register", func(w http.ResponseWriter, r *http.Request) { handleAuthRegister(db, w, r) })
 	mux.HandleFunc("/api/auth/login", func(w http.ResponseWriter, r *http.Request) { handleAuthLogin(db, w, r) })
