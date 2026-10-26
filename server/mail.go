@@ -17,6 +17,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/big"
 	"net"
 	"net/http"
@@ -29,6 +30,10 @@ import (
 )
 
 // ===== 配置 =====
+
+func logf(format string, args ...interface{}) {
+	log.Printf(format, args...)
+}
 
 func env(k, def string) string {
 	if v := strings.TrimSpace(os.Getenv(k)); v != "" {
@@ -76,6 +81,24 @@ func ensureMailSchema(db *sql.DB) error {
 	} {
 		if err := cAddColumn(db, c[0], c[1], c[2]); err != nil {
 			return err
+		}
+	}
+	// 老用户没有 UID 的补一个（加字段之前的账号）
+	rows, err := db.Query(`SELECT id FROM c_users WHERE uid IS NULL OR uid=''`)
+	if err == nil {
+		var ids []int64
+		for rows.Next() {
+			var id int64
+			if rows.Scan(&id) == nil {
+				ids = append(ids, id)
+			}
+		}
+		rows.Close()
+		for _, id := range ids {
+			uid := newUID(db)
+			if _, err := db.Exec(`UPDATE c_users SET uid=? WHERE id=?`, uid, id); err == nil {
+				logf("[mail] 为老用户 #%d 补 UID: %s", id, uid)
+			}
 		}
 	}
 	return nil
