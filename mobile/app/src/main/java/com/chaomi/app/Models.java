@@ -42,7 +42,7 @@ class PostAndComments {
 
 /** 文章原生块：客户端据此原生渲染，不依赖 WebView */
 class Block {
-    String type;   // p | h2 | h3 | img | quote | code | li
+    String type;   // p | h2 | h3 | img | quote | code | li | topic
     String text;
     String src;
     String alt;
@@ -59,6 +59,19 @@ class Article {
     String summary;
     List<Block> blocks;
     int count;
+}
+
+/** 链接卡片（服务端解析 OG 后的结果） */
+class LinkCard {
+    String url;
+    String title;
+    String description;
+    String image;
+    String siteName;
+    String favicon;
+    String kind;      // article | video | image | wechat | github | doc | web
+    boolean ok;
+    String error;
 }
 
 /** 账号 */

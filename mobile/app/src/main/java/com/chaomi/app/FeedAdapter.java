@@ -114,6 +114,7 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.VH> {
             // 有原生块时用首段做预览，比标题更实在
             if (p.blocks != null) {
                 for (Block b : p.blocks) {
+                    if (b != null && "topic".equals(b.type)) continue;
                     if (b != null && b.text != null && !b.text.trim().isEmpty()) {
                         String s = b.text.trim();
                         return s.length() > 140 ? s.substring(0, 140) + "…" : s;

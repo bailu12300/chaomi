@@ -957,6 +957,18 @@ func handleCommunityCreatePost(db *sql.DB, w http.ResponseWriter, r *http.Reques
 	if p.Cover == "" && len(p.Images) > 0 {
 		p.Cover = p.Images[0]
 	}
+	// 话题块 → 标签（编辑器的「+ 话题」）
+	for _, b := range p.Blocks {
+		if b.Type == "topic" && strings.TrimSpace(b.Text) != "" {
+			for _, t := range strings.FieldsFunc(b.Text, func(r rune) bool {
+				return r == ',' || r == '，' || r == '#' || r == ' ' || r == '、'
+			}) {
+				if s := strings.TrimSpace(t); s != "" {
+					p.Tags = cAppendUnique(p.Tags, s)
+				}
+			}
+		}
+	}
 	for _, t := range cExtractTags(p.Body + " " + p.Title) {
 		p.Tags = cAppendUnique(p.Tags, t)
 	}

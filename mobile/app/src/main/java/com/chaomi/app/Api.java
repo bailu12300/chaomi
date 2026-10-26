@@ -193,6 +193,16 @@ public class Api {
         if (err(root) != null) throw new Exception(err(root));
     }
 
+    // ---------- 链接卡片 ----------
+
+    public static LinkCard linkPreview(String url) throws Exception {
+        String json = get(BASE + "/api/link/preview?url=" + URLEncoder.encode(url, "UTF-8"));
+        Map<String, Object> root = gson.fromJson(json, Map.class);
+        if (root == null) throw new Exception("空响应");
+        if (err(root) != null) throw new Exception(err(root));
+        return gson.fromJson(gson.toJson(root.get("data")), LinkCard.class);
+    }
+
     // ---------- 文章解析 ----------
 
     public static Article parseArticle(String url) throws Exception {

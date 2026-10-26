@@ -60,6 +60,10 @@ class ArticleRenderer {
                 return listItem(ctx, b.text);
             case "img":
                 return image(ctx, b.src, b.alt);
+            case "topic":
+                return topic(ctx, b.text);
+            case "link":
+                return linkCard(ctx, b);
             case "p":
             default:
                 if (TextUtils.isEmpty(b.text)) return null;
@@ -177,6 +181,11 @@ class ArticleRenderer {
 
     private static View image(Context ctx, String src, String alt) {
         if (TextUtils.isEmpty(src)) return null;
+
+        String url = Utils.fullUrl(src);
+        String lower = url == null ? "" : url.toLowerCase();
+
+        // 动图（gif/webp）用 GifImageView 播放；静态图仍走 Picasso
         ImageView iv = new ImageView(ctx);
         iv.setAdjustViewBounds(true);
         iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
@@ -185,11 +194,145 @@ class ArticleRenderer {
         p.topMargin = dp(ctx, 12);
         iv.setLayoutParams(p);
         iv.setContentDescription(alt == null ? "" : alt);
-        // Picasso 自带内存/磁盘缓存；公众号图片依赖 referer，这里不强加，失败就留空
-        Picasso.get()
-                .load(Utils.fullUrl(src))
-                .placeholder(android.R.color.transparent)
-                .into(iv);
+
+        if (lower.endsWith(".gif")) {
+            // GIF：用 ImageDecoder / Movie 播放
+            loadGif(ctx, iv, url);
+        } else {
+            Picasso.get()
+                    .load(url)
+                    .placeholder(android.R.color.transparent)
+                    .into(iv);
+        }
         return iv;
     }
+
+    /** 播放 GIF：API 28+ 用 ImageDecoder，低版本用 Movie 逐帧 */
+    private static void loadGif(Context ctx, ImageView iv, String url) {
+        new Thread(() -> {
+            try {
+                java.net.HttpURLConnection c =
+                        (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                c.setConnectTimeout(15000);
+                c.setReadTimeout(20000);
+                java.io.InputStream is = c.getInputStream();
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = is.read(buf)) > 0) bos.write(buf, 0, n);
+                is.close();
+                final byte[] data = bos.toByteArray();
+                if (data.length == 0) return;
+                iv.post(() -> GifPlayer.play(iv, data));
+            } catch (Exception ignored) {
+            }
+        }).start();
+    }
+
+    /** 话题块：渲染成小徽章 */
+    private static View topic(Context ctx, String text) {
+        TextView tv = new TextView(ctx);
+        tv.setText("#" + (text == null ? "" : text.trim()));
+        tv.setTextSize(12);
+        tv.setTextColor(COL_ACCENT);
+        tv.setPadding(dp(ctx, 8), dp(ctx, 4), dp(ctx, 8), dp(ctx, 4));
+        android.graphics.drawable.GradientDrawable g =
+                new android.graphics.drawable.GradientDrawable();
+        g.setCornerRadius(dp(ctx, 6));
+        g.setColor(0x1F58A6FF);
+        tv.setBackground(g);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        p.topMargin = dp(ctx, 8);
+        tv.setLayoutParams(p);
+        return tv;
+    }
+
+
+    /** 链接卡片：标题 + 摘要 + 封面 + 域名，点击打开浏览器 */
+    private static View linkCard(Context ctx, Block b) {
+        if (TextUtils.isEmpty(b.src) && TextUtils.isEmpty(b.text)) return null;
+
+        LinearLayout card = new LinearLayout(ctx);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackgroundColor(COL_SURFACE);
+        card.setPadding(dp(ctx, 12), dp(ctx, 10), dp(ctx, 12), dp(ctx, 10));
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cp.topMargin = dp(ctx, 12);
+        card.setLayoutParams(cp);
+
+        // 封面
+        if (!TextUtils.isEmpty(b.src) && b.src.toLowerCase().endsWith(".gif")) {
+            // 图片链接本身是动图
+        }
+        if (!TextUtils.isEmpty(b.alt) && b.alt.startsWith("http")) {
+            // alt 传封面（公众号链接时）
+            ImageView iv = new ImageView(ctx);
+            iv.setAdjustViewBounds(true);
+            iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, 150));
+            iv.setLayoutParams(ip);
+            Picasso.get().load(Utils.fullUrl(b.alt)).into(iv);
+            card.addView(iv);
+        }
+
+        // 域名小字
+        TextView site = new TextView(ctx);
+        String host = "";
+        try {
+            host = new java.net.URL(b.src).getHost();
+        } catch (Exception ignored) {
+            host = b.src == null ? "" : b.src;
+        }
+        site.setText(host);
+        site.setTextSize(10);
+        site.setTextColor(COL_DIM);
+        card.addView(site);
+
+        // 标题
+        TextView title = new TextView(ctx);
+        title.setText(b.text == null ? "" : b.text);
+        title.setTextSize(14.5f);
+        title.setTextColor(COL_TEXT);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setMaxLines(3);
+        title.setEllipsize(TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tp.topMargin = dp(ctx, 4);
+        title.setLayoutParams(tp);
+        card.addView(title);
+
+        // 摘要
+        if (!TextUtils.isEmpty(b.alt) && !b.alt.startsWith("http")) {
+            TextView desc = new TextView(ctx);
+            desc.setText(b.alt);
+            desc.setTextSize(12.5f);
+            desc.setTextColor(COL_DIM);
+            desc.setMaxLines(3);
+            desc.setEllipsize(TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams dp2 = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            dp2.topMargin = dp(ctx, 3);
+            desc.setLayoutParams(dp2);
+            card.addView(desc);
+        }
+
+        // 点击打开
+        final String url = b.src;
+        card.setOnClickListener(v -> {
+            if (TextUtils.isEmpty(url)) return;
+            try {
+                android.content.Intent i = new android.content.Intent(
+                        android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url));
+                i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(i);
+            } catch (Exception ignored) {
+            }
+        });
+        return card;
+    }
+
 }

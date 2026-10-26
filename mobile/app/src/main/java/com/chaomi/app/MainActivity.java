@@ -63,7 +63,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
     private boolean marketLoaded = false;
 
     private Realtime realtime;
-    private ComposerSheet activeSheet;
+    private EditorSheet activeSheet;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -217,7 +217,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == ComposerSheet.REQ_PICK && activeSheet != null) {
+        if (requestCode == EditorSheet.REQ_PICK && activeSheet != null) {
             activeSheet.onPickResult(resultCode, data);
             return;
         }
@@ -505,7 +505,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
 
     private void openComposer() {
         if (!Session.loggedIn(this)) { promptLogin(); return; }
-        ComposerSheet sheet = new ComposerSheet(this, Session.nick(this), post -> {
+        EditorSheet sheet = new EditorSheet(this, Session.nick(this), post -> {
             feedList.add(0, post);
             feedAdapter.notifyDataSetChanged();
             feedView.smoothScrollToPosition(0);
