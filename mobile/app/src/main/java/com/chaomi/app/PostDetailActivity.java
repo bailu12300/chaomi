@@ -106,6 +106,34 @@ public class PostDetailActivity extends AppCompatActivity {
             readCard.setVisibility(View.VISIBLE);
             TextView hint = findViewById(R.id.readHint);
             TextView src = findViewById(R.id.readSource);
+
+            // 公众号信息：头像 + 名称 + 发布时间（都是公开可抓的字段）
+            View accRow = findViewById(R.id.accountRow);
+            ImageView accAvatar = findViewById(R.id.accountAvatar);
+            TextView accName = findViewById(R.id.accountName);
+            TextView accMeta = findViewById(R.id.accountMeta);
+            boolean hasAccount = (post.accountName != null && !post.accountName.isEmpty())
+                    || (post.accountAvatar != null && !post.accountAvatar.isEmpty());
+            if (hasAccount) {
+                accRow.setVisibility(View.VISIBLE);
+                accName.setText(post.accountName == null ? "" : post.accountName);
+                StringBuilder sb = new StringBuilder();
+                if (post.publishTime > 0) {
+                    sb.append(Utils.formatTime(post.publishTime));
+                }
+                if (post.views > 0) {
+                    if (sb.length() > 0) sb.append(" · ");
+                    sb.append(post.views).append(" 次浏览");
+                }
+                accMeta.setText(sb.toString());
+                if (post.accountAvatar != null && !post.accountAvatar.isEmpty()) {
+                    Picasso.get().load(Utils.fullUrl(post.accountAvatar)).into(accAvatar);
+                } else {
+                    accAvatar.setVisibility(View.GONE);
+                }
+            } else {
+                accRow.setVisibility(View.GONE);
+            }
             if (hint != null) {
                 String t = post.title == null ? "" : post.title.trim();
                 hint.setText(t.isEmpty()

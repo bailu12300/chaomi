@@ -15,6 +15,9 @@ class Post {
     List<Block> blocks;   // article 类型的原生块
     String author;
     List<String> tags;
+    String accountName;     // 公众号名称
+    String accountAvatar;   // 公众号头像
+    long publishTime;       // 原文发布时间
     int likes;
     boolean liked;
     int views;
@@ -57,6 +60,16 @@ class Article {
     List<String> images;
     String url;
     String summary;
+    // 公众号公开信息
+    String accountName;
+    String accountId;
+    String accountAvatar;
+    long publishTime;
+    String publishText;
+    int wordCount;
+    int imageCount;
+    String firstImage;
+    String kind;
     List<Block> blocks;
     int count;
 }

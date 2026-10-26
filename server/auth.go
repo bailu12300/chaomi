@@ -504,85 +504,18 @@ func handleArticleImport(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "缺少 url"})
 		return
 	}
-	// 只取元信息：正文交给客户端浏览器渲染，排版即原文
-	art, err := cParseArticleMeta(u)
+	// 只取元信息（含公众号名称/头像/发布时间），正文交给客户端浏览器渲染
+	m, err := cParseArticleMeta(u)
 	if err != nil {
+		// 即使解析报错，能拿到的字段也一并返回，方便前端排查
+		if m != nil && m.Title != "" {
+			writeJSON(w, 200, map[string]interface{}{"code": 0, "data": metaToMap(m)})
+			return
+		}
 		writeJSON(w, 502, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": map[string]interface{}{
-		"title":   art.Title,
-		"author":  art.Author,
-		"cover":   art.Cover,
-		"url":     art.URL,
-		"summary": art.Summary,
-		"blocks":  []CBlock{},
-		"count":   0,
-	}})
-}
-
-// cParseArticleMeta 轻量解析：只取标题 / 作者 / 封面 / 摘要。
-//
-// 这是现在的默认路径：正文不再转 blocks —— 公众号排版依赖内联样式、自定义组件、
-// 视频号，原生渲染永远追不上。正文交给客户端 WebView 渲染原文即可。
-func cParseArticleMeta(rawURL string) (*CArticle, error) {
-	resp, err := cHttpGetUA(rawURL)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("远端返回 %d", resp.StatusCode)
-	}
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	a := &CArticle{URL: rawURL}
-
-	// 标题：og:title 最准，其次公众号的 #activity-name
-	a.Title = cMetaContent(doc, "og:title")
-	if strings.TrimSpace(a.Title) == "" {
-		a.Title = strings.TrimSpace(doc.Find("#activity-name").Text())
-	}
-	if strings.TrimSpace(a.Title) == "" {
-		a.Title = strings.TrimSpace(doc.Find("h1.rich_media_title").Text())
-	}
-	if strings.TrimSpace(a.Title) == "" {
-		a.Title = strings.TrimSpace(doc.Find("title").Text())
-	}
-	a.Title = strings.Join(strings.Fields(a.Title), " ")
-
-	a.Author = cMetaContent(doc, "og:article:author")
-	if strings.TrimSpace(a.Author) == "" {
-		a.Author = strings.TrimSpace(doc.Find("#js_name").Text())
-	}
-	a.Author = strings.TrimSpace(a.Author)
-
-	a.Cover = cAbsURL(cMetaContent(doc, "og:image"), rawURL)
-
-	// 摘要：og:description，退而取正文前 120 字
-	a.Summary = cMetaContent(doc, "og:description")
-	if strings.TrimSpace(a.Summary) == "" {
-		var text string
-		sel := doc.Find("#js_content")
-		if sel.Length() == 0 {
-			sel = doc.Find("body")
-		}
-		text = strings.Join(strings.Fields(sel.Text()), " ")
-		r := []rune(text)
-		if len(r) > 120 {
-			text = string(r[:120]) + "…"
-		}
-		a.Summary = text
-	}
-	a.Summary = strings.Join(strings.Fields(a.Summary), " ")
-
-	if a.Title == "" {
-		return a, fmt.Errorf("没能解析出标题，可能页面需要登录或已被删除")
-	}
-	return a, nil
+	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": metaToMap(m)})
 }
 
 // cParseArticleNative 解析并同时产出 blocks（旧路径，保留用于自测接口）
@@ -739,7 +672,8 @@ func cListPostsEx(db *sql.DB, before int64, limit int, tag, q string, userID int
 		orderBy = "(likes*3 + views) DESC, created_at DESC"
 	}
 
-	q2 := `SELECT id,user_id,type,title,body,cover,url,images,blocks,author,tags,likes,views,created_at
+	// ★ 用统一列清单，别再手写 SELECT 列表 —— 加字段时漏掉就会静默丢数据
+	q2 := `SELECT ` + cPostColumns + `
 		FROM c_posts WHERE ` + strings.Join(where, " AND ") + ` ORDER BY ` + orderBy + ` LIMIT ?`
 	args = append(args, limit)
 
@@ -750,22 +684,9 @@ func cListPostsEx(db *sql.DB, before int64, limit int, tag, q string, userID int
 	defer rows.Close()
 	out := []CPost{}
 	for rows.Next() {
-		var p CPost
-		var images, tags, blocks sql.NullString
-		var created int64
-		if err := rows.Scan(&p.ID, &p.UserID, &p.Type, &p.Title, &p.Body, &p.Cover, &p.URL,
-			&images, &blocks, &p.Author, &tags, &p.Likes, &p.Views, &created); err != nil {
+		p, err := cScanPost(rows.Scan)
+		if err != nil {
 			continue
-		}
-		p.CreatedAt = created
-		if images.Valid && images.String != "" {
-			_ = json.Unmarshal([]byte(images.String), &p.Images)
-		}
-		if tags.Valid && tags.String != "" {
-			_ = json.Unmarshal([]byte(tags.String), &p.Tags)
-		}
-		if blocks.Valid && blocks.String != "" {
-			_ = json.Unmarshal([]byte(blocks.String), &p.Blocks)
 		}
 		out = append(out, p)
 	}

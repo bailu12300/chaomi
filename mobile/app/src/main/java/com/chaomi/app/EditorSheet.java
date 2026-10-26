@@ -60,6 +60,9 @@ public class EditorSheet extends BottomSheetDialog {
     private EditBlock pendingImageBlock;   // 正在选图的块
     private String articleUrl = "";        // 公众号原文链接
     private String articleCover = "";      // 原文封面
+    private String articleAccount = "";    // 公众号名称
+    private String articleAvatar = "";     // 公众号头像
+    private long articlePubTime = 0;       // 原文发布时间
 
     public EditorSheet(AppCompatActivity act, String nick, OnPublished cb) {
         super(act);
@@ -395,14 +398,21 @@ public class EditorSheet extends BottomSheetDialog {
                     titleEt.setText(a.title.trim());
                     articleUrl = url;
                     articleCover = a.cover == null ? "" : a.cover;
+                    articleAccount = a.accountName == null ? "" : a.accountName;
+                    articleAvatar = a.accountAvatar == null ? "" : a.accountAvatar;
+                    articlePubTime = a.publishTime;
 
                     // 清掉空的占位块，正文不需要本地存
                     blocks.clear();
                     renderBlocks();
 
                     articleMeta.setVisibility(View.VISIBLE);
-                    articleMeta.setText("已取到标题 · 正文将在阅读页用浏览器渲染\n"
-                            + a.title.trim());
+                    StringBuilder meta = new StringBuilder();
+                    if (articleAccount != null && !articleAccount.isEmpty()) {
+                        meta.append(articleAccount).append(" · ");
+                    }
+                    meta.append("正文将在阅读页用浏览器渲染");
+                    articleMeta.setText(meta.toString() + "\n" + a.title.trim());
                     toast("标题已获取，点发布即可");
                 });
             } catch (Exception e) {
@@ -508,6 +518,9 @@ public class EditorSheet extends BottomSheetDialog {
                     if (articleCover != null && !articleCover.isEmpty()) {
                         p.cover = articleCover;
                     }
+                    p.accountName = articleAccount;
+                    p.accountAvatar = articleAvatar;
+                    p.publishTime = articlePubTime;
                     // 正文只留一句提示，不存解析出来的内容（避免和原文重复）
                     p.body = "";
                     p.blocks = new ArrayList<>();

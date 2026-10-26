@@ -43,6 +43,10 @@ type CPost struct {
 	Blocks       []CBlock `json:"blocks,omitempty"` // article 类型的原生块
 	Author       string   `json:"author"`
 	Tags         []string `json:"tags,omitempty"`
+	// 公众号信息（发布时从解析结果带过来，供阅读页展示）
+	AccountName   string `json:"accountName,omitempty"`
+	AccountAvatar string `json:"accountAvatar,omitempty"`
+	PublishTime   int64  `json:"publishTime,omitempty"`
 	Likes        int      `json:"likes"`
 	Liked        bool     `json:"liked,omitempty"`
 	Views        int      `json:"views,omitempty"`
@@ -85,6 +89,9 @@ func ensureCommunitySchema(db *sql.DB) error {
 			blocks MEDIUMTEXT,
 			author VARCHAR(64),
 			tags MEDIUMTEXT,
+			account_name VARCHAR(128) DEFAULT '',
+			account_avatar VARCHAR(512) DEFAULT '',
+			publish_time BIGINT DEFAULT 0,
 			user_id BIGINT DEFAULT 0,
 			likes INT DEFAULT 0,
 			views INT DEFAULT 0,
@@ -92,6 +99,10 @@ func ensureCommunitySchema(db *sql.DB) error {
 			INDEX idx_cposts_ct(created_at),
 			INDEX idx_cposts_uid(user_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+		// 老表补字段（MySQL 没有 ADD COLUMN IF NOT EXISTS，用错误忽略兜底）
+		`ALTER TABLE c_posts ADD COLUMN account_name VARCHAR(128) DEFAULT ''`,
+		`ALTER TABLE c_posts ADD COLUMN account_avatar VARCHAR(512) DEFAULT ''`,
+		`ALTER TABLE c_posts ADD COLUMN publish_time BIGINT DEFAULT 0`,
 		`CREATE TABLE IF NOT EXISTS c_comments(
 			id BIGINT AUTO_INCREMENT PRIMARY KEY,
 			post_id BIGINT NOT NULL,
@@ -122,18 +133,24 @@ func ensureCommunitySchema(db *sql.DB) error {
 }
 
 // cPostColumns 统一的帖子列清单，保证各处扫描顺序一致
-const cPostColumns = `id,user_id,type,title,body,cover,url,images,blocks,author,tags,likes,views,created_at`
+const cPostColumns = `id,user_id,type,title,body,cover,url,images,blocks,author,tags,account_name,account_avatar,publish_time,likes,views,created_at`
 
 func cScanPost(scan func(...interface{}) error) (CPost, error) {
 	var p CPost
 	var images, tags, blocks sql.NullString
 	var created int64
+	var accName, accAvatar sql.NullString
+	var pubTime sql.NullInt64
 	err := scan(&p.ID, &p.UserID, &p.Type, &p.Title, &p.Body, &p.Cover, &p.URL,
-		&images, &blocks, &p.Author, &tags, &p.Likes, &p.Views, &created)
+		&images, &blocks, &p.Author, &tags, &accName, &accAvatar, &pubTime,
+		&p.Likes, &p.Views, &created)
 	if err != nil {
 		return p, err
 	}
 	p.CreatedAt = created
+	p.AccountName = accName.String
+	p.AccountAvatar = accAvatar.String
+	p.PublishTime = pubTime.Int64
 	if images.Valid && images.String != "" {
 		_ = json.Unmarshal([]byte(images.String), &p.Images)
 	}
@@ -155,9 +172,11 @@ func cCreatePost(db *sql.DB, p CPost) (CPost, error) {
 		blk = string(b)
 	}
 	res, err := db.Exec(
-		`INSERT INTO c_posts(user_id,type,title,body,cover,url,images,blocks,author,tags,created_at)
-		 VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-		p.UserID, p.Type, p.Title, p.Body, p.Cover, p.URL, string(imgs), blk, p.Author, string(tags), p.CreatedAt)
+		`INSERT INTO c_posts(user_id,type,title,body,cover,url,images,blocks,author,tags,
+			account_name,account_avatar,publish_time,created_at)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		p.UserID, p.Type, p.Title, p.Body, p.Cover, p.URL, string(imgs), blk, p.Author,
+		string(tags), p.AccountName, p.AccountAvatar, p.PublishTime, p.CreatedAt)
 	if err != nil {
 		return p, err
 	}
