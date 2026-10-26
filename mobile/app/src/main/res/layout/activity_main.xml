@@ -55,20 +55,6 @@
             android:textSize="12sp" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnTheme"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:insetLeft="0dp"
-            android:insetRight="0dp"
-            android:minWidth="0dp"
-            android:paddingStart="6dp"
-            android:paddingEnd="6dp"
-            android:text="@string/theme_icon"
-            android:textColor="@color/chaomi_text_dim"
-            android:textSize="13sp" />
-
-        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnNode"
             style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"
@@ -245,7 +231,7 @@
                 android:layout_marginEnd="10dp"
                 android:layout_marginTop="2dp"
                 android:background="@color/chaomi_surface_2"
-                android:hint="搜型号 / 品牌，如 5070、9700X"
+                android:hint="搜型号，如 5070、5090"
                 android:imeOptions="actionSearch"
                 android:inputType="text"
                 android:maxLines="1"
@@ -268,7 +254,8 @@
                     android:id="@+id/catRow"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal" />
+                    android:orientation="horizontal"
+                    android:visibility="gone" />
             </HorizontalScrollView>
 
             <LinearLayout
@@ -310,20 +297,6 @@
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
                     android:text="价格高"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnCrawl"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:minWidth="0dp"
-                    android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
-                    android:text="采集"
-                    android:textColor="@color/chaomi_gold"
                     android:textSize="12sp" />
 
                 <com.google.android.material.button.MaterialButton

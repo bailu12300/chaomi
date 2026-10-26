@@ -74,6 +74,30 @@ class Article {
     int count;
 }
 
+/** Amazon 显卡行情（美元原价 + 人民币换算） */
+class GpuModel {
+    String key;
+    String model;        // 4060 / 5070 Ti / 5090
+    String modelFull;    // RTX 5070 Ti
+    String spec;
+    String title;        // Amazon 商品标题
+    double priceUsd;
+    double priceCny;
+    double fxRate;
+    String asin;
+    String amazonUrl;
+    String availability;
+    String image;
+    long updatedAt;
+}
+
+/** 汇率信息 */
+class GpuFx {
+    double rate;
+    long at;
+    String pair;
+}
+
 /** 链接卡片（服务端解析 OG 后的结果） */
 class LinkCard {
     String url;

@@ -116,7 +116,7 @@ public class RulesActivity extends AppCompatActivity {
         Toast.makeText(this, "下载中…", Toast.LENGTH_SHORT).show();
         Api.bg(() -> {
             try {
-                String json = CrawlerApi.Http.get(url, null);
+                String json = Http.get(url, null);
                 int n = RuleStore.importJson(this, json, "url");
                 runOnUiThread(() -> {
                     if (n == 0) {

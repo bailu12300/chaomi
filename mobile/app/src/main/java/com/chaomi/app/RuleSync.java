@@ -44,7 +44,7 @@ class RuleSync {
         String url = Api.BASE + "/api/adrules?version=" + (force ? 0 : localVer);
         String json;
         try {
-            json = CrawlerApi.Http.get(url, null);
+            json = Http.get(url, null);
         } catch (Exception e) {
             res.message = "网络失败：" + e.getMessage();
             return res;
@@ -152,7 +152,7 @@ class RuleSync {
         b.put("ruleId", ruleId);
         b.put("pkg", pkg);
         try {
-            CrawlerApi.Http.postJson(Api.BASE + "/api/adrules/report",
+            Http.postJson(Api.BASE + "/api/adrules/report",
                     GSON.toJson(b), null);
         } catch (Exception ignored) {
         }

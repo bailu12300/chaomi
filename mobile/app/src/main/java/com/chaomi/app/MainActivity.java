@@ -45,8 +45,10 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
 
     private final List<Post> feedList = new ArrayList<>();
     private FeedAdapter feedAdapter;
-    private final List<HwModel> hwList = new ArrayList<>();
-    private HwAdapter hwAdapter;
+    // Amazon 显卡行情（替代原多品类行情）
+    private final List<GpuModel> gpuList = new ArrayList<>();
+    private GpuAdapter gpuAdapter;
+    private double fxRate = 0;
 
     // 信息流状态
     private String feedSort = "";     // "" | hot
@@ -104,8 +106,8 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         marketView.setLayoutManager(new LinearLayoutManager(this));
         feedAdapter = new FeedAdapter(feedList, this::openDetail, this::like);
         feedView.setAdapter(feedAdapter);
-        hwAdapter = new HwAdapter(hwList, this::openModel);
-        marketView.setAdapter(hwAdapter);
+        gpuAdapter = new GpuAdapter(gpuList, this::openGpu);
+        marketView.setAdapter(gpuAdapter);
 
         swipe.setOnRefreshListener(this::loadFeed);
         marketSwipe.setOnRefreshListener(this::loadMarket);
@@ -115,10 +117,8 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         btnAccount.setOnClickListener(v -> onAccountClick());
         findViewById(R.id.btnAdSkip).setOnClickListener(v ->
                 startActivity(new Intent(this, AdSkipActivity.class)));
-        findViewById(R.id.btnTheme).setOnClickListener(v -> showThemePicker());
         findViewById(R.id.btnNode).setOnClickListener(v ->
                 startActivity(new Intent(this, NodeActivity.class)));
-        findViewById(R.id.btnCrawl).setOnClickListener(v -> onCrawlClick());
 
         fLatest.setOnClickListener(v -> { feedSort = ""; feedMine = false; loadFeed(); });
         fHot.setOnClickListener(v -> { feedSort = "hot"; feedMine = false; loadFeed(); });
@@ -142,7 +142,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         sortLatest.setOnClickListener(v -> setSort(""));
         sortPriceAsc.setOnClickListener(v -> setSort("price_asc"));
         sortPriceDesc.setOnClickListener(v -> setSort("price_desc"));
-        sortChange.setOnClickListener(v -> setSort("change"));
+        sortChange.setVisibility(View.GONE); // 涨跌榜依赖多轮采集，暂时隐藏
 
         hwSearch.setOnEditorActionListener((v, actionId, ev) -> {
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
@@ -178,25 +178,15 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         startActivity(new Intent(this, ProfileActivity.class));
     }
 
-    /** 主题切换：浅色 / 深色 / 跟随系统 */
-    private void showThemePicker() {
-        final String[] labels = {"浅色", "深色", "跟随系统"};
-        final String[] modes = {ThemeManager.LIGHT, ThemeManager.DARK, ThemeManager.AUTO};
-        int cur = 0;
-        String now = ThemeManager.mode(this);
-        for (int i = 0; i < modes.length; i++) {
-            if (modes[i].equals(now)) cur = i;
-        }
-        new AlertDialog.Builder(this)
-                .setTitle("主题（当前：" + labels[cur] + "）")
-                .setSingleChoiceItems(labels, cur, (d, which) -> {
-                    d.dismiss();
-                    if (modes[which].equals(ThemeManager.mode(this))) return;
-                    ThemeManager.setMode(this, modes[which]);
-                    recreate();
-                })
-                .setNegativeButton("取消", null)
-                .show();
+    /** 后台静默同步一次在线去广告规则 */
+    private void syncAdRules() {
+        Api.bg(() -> {
+            try {
+                RuleSync.Result r = RuleSync.sync(this, false);
+                if (r.changed) android.util.Log.i("chaomi", "规则已更新: " + r.message);
+            } catch (Exception ignored) {
+            }
+        });
     }
 
     private void promptLogin() {
@@ -239,8 +229,8 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         super.onResume();
         Session.restore(this);
         paintAccount();
-        // 采集结束回来时刷新行情，让新抓的数据立刻可见
-        if (marketLoaded && !CrawlService.isRunning(this)) loadMarket();
+        // 行情自动刷新（采集已在服务器端，App 只负责展示）
+        if (marketLoaded) loadMarket();
     }
 
     // ---------- 视图切换 ----------
@@ -369,71 +359,102 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
     }
 
     private void loadMarket() {
-        final String cat = curCat, sort = curSort, q = curQuery;
+        final String q = curQuery == null ? "" : curQuery.trim().toLowerCase();
+        final String sort = curSort;
         marketSwipe.setRefreshing(true);
         Api.bg(() -> {
             try {
-                List<HwModel> list;
-                if ("change".equals(sort)) {
-                    list = Api.hwMovers(moversWindow, cat);
-                } else {
-                    list = Api.hwModels(cat, q, sort);
+                Api.GpuList res = Api.gpuList();
+                List<GpuModel> list = new ArrayList<>(res.list);
+                // 本地搜索
+                if (!q.isEmpty()) {
+                    List<GpuModel> filtered = new ArrayList<>();
+                    for (GpuModel m : list) {
+                        String hay = ((m.model == null ? "" : m.model) + " "
+                                + (m.spec == null ? "" : m.spec) + " "
+                                + (m.title == null ? "" : m.title)).toLowerCase();
+                        if (hay.contains(q)) filtered.add(m);
+                    }
+                    list = filtered;
                 }
-                final List<HwCat> cats = Api.hwCats();
-                final Api.HwStatusRes st = Api.hwStatus();
-                final List<HwModel> got = list;
+                // 本地排序
+                if ("price_asc".equals(sort)) {
+                    list.sort((a, b) -> Double.compare(a.priceUsd, b.priceUsd));
+                } else if ("price_desc".equals(sort)) {
+                    list.sort((a, b) -> Double.compare(b.priceUsd, a.priceUsd));
+                } else {
+                    list.sort((a, b) -> Integer.compare(numOf(a.model), numOf(b.model)));
+                }
+                final List<GpuModel> got = list;
+                final double rate = res.fx == null ? 0 : res.fx.rate;
                 runOnUiThread(() -> {
-                    hwTotal = st.count;
-                    hwRounds = st.rounds;
-                    hwUpdatedAt = st.updatedAt;
-                    hwList.clear();
-                    hwList.addAll(got);
-                    hwAdapter.notifyDataSetChanged();
-                    buildCats(cats);
+                    fxRate = rate;
+                    gpuList.clear();
+                    gpuList.addAll(got);
+                    gpuAdapter.notifyDataSetChanged();
                     marketLoaded = true;
                     marketSwipe.setRefreshing(false);
+                    hwTotal = got.size();
                     updateHint();
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> { marketSwipe.setRefreshing(false); toast("行情加载失败：" + e.getMessage()); });
+                runOnUiThread(() -> {
+                    marketSwipe.setRefreshing(false);
+                    toast("行情加载失败：" + e.getMessage());
+                });
             }
         });
     }
 
+    /** 型号排序权重：5070 Ti → 5070 */
+    private int numOf(String model) {
+        if (model == null) return 0;
+        StringBuilder sb = new StringBuilder();
+        for (char c : model.toCharArray()) {
+            if (c >= '0' && c <= '9') sb.append(c);
+            else if (sb.length() > 0) break;
+        }
+        try {
+            return Integer.parseInt(sb.toString());
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /** 点击显卡：用系统浏览器打开 Amazon 商品页 */
+    private void openGpu(GpuModel m) {
+        String url = (m.amazonUrl == null || m.amazonUrl.isEmpty())
+                ? "https://www.amazon.com/s?k=" + android.net.Uri.encode("RTX " + m.model)
+                : m.amazonUrl;
+        try {
+            startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse(url)));
+        } catch (Exception e) {
+            toast("没有可用浏览器");
+        }
+    }
+
     private void updateHint() {
         StringBuilder sb = new StringBuilder();
-        if ("change".equals(curSort)) {
-            sb.append("涨跌榜 · 仅展示合理波动（±40% 内）· 共 ").append(hwList.size()).append(" 条");
-            if (hwList.isEmpty()) sb.append(" · 本轮价格无变化，采集积累后自动出现");
-        } else {
-            sb.append("共 ").append(hwTotal).append(" 个型号");
-            if (hwRounds > 0) sb.append(" · 已采集 ").append(hwRounds).append(" 轮");
-            if (hwUpdatedAt > 0) sb.append(" · 更新 ").append(Utils.formatTime(hwUpdatedAt));
-            if (!curCat.isEmpty()) sb.append(" · ").append(curCat);
-            if (!curQuery.isEmpty()) sb.append(" · 搜索「").append(curQuery).append("」");
+        sb.append("Amazon 显卡 · 共 ").append(hwTotal).append(" 个型号");
+        if (fxRate > 0) {
+            sb.append(" · 汇率 1 USD ≈ ").append(String.format(java.util.Locale.CHINA, "%.2f", fxRate)).append(" CNY");
         }
+        if (hwUpdatedAt > 0) sb.append(" · 更新 ").append(Utils.formatTime(hwUpdatedAt));
+        if (!curQuery.isEmpty()) sb.append(" · 搜索「").append(curQuery).append("」");
         marketHint.setText(sb.toString());
         highlightSort();
     }
 
     private void highlightSort() {
-        MaterialButton[] all = {sortLatest, sortPriceAsc, sortPriceDesc, sortChange};
+        MaterialButton[] all = {sortLatest, sortPriceAsc, sortPriceDesc};
         String[] keys = {"", "price_asc", "price_desc", "change"};
         for (int i = 0; i < all.length; i++) {
             all[i].setTextColor(keys[i].equals(curSort) ? ContextCompat.getColor(this, R.color.chaomi_accent) : ContextCompat.getColor(this, R.color.chaomi_text_dim));
         }
     }
 
-    private void buildCats(List<HwCat> cats) {
-        if (catRow.getChildCount() > 0) return;
-        catRow.addView(makeChip("全部", "", true));
-        if (cats != null) {
-            for (HwCat c : cats) {
-                if (c == null || c.cat == null) continue;
-                catRow.addView(makeChip(c.cat + " " + c.count, c.cat, false));
-            }
-        }
-    }
+
 
     private TextView makeChip(String label, String cat, boolean selected) {
         TextView tv = new TextView(this);
@@ -491,22 +512,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         startActivity(i);
     }
 
-    private void openModel(HwModel m) {
-        Intent i = new Intent(this, ModelDetailActivity.class);
-        i.putExtra("key", m.key);
-        i.putExtra("model", m.model);
-        i.putExtra("brand", m.brand);
-        i.putExtra("spec", m.spec);
-        i.putExtra("cat", m.catLabel);
-        i.putExtra("platform", m.platform);
-        i.putExtra("shop", m.shop);
-        i.putExtra("title", m.title);
-        i.putExtra("price", Utils.priceStr(m.price));
-        i.putExtra("changePct", m.changePct);
-        i.putExtra("changeAbs", m.changeAbs);
-        i.putExtra("hasChange", m.hasChange);
-        startActivity(i);
-    }
+
 
     private void openComposer() {
         if (!Session.loggedIn(this)) { promptLogin(); return; }
@@ -576,47 +582,4 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
             AdSkipPrefs.sp(this).edit().putBoolean("asked", true).apply();
         }
     }
-
-
-    /** 采集按钮：启动/停止 + 状态 */
-    private void onCrawlClick() {
-        if (CrawlService.isRunning(this)) {
-            new AlertDialog.Builder(this)
-                    .setTitle("正在采集")
-                    .setMessage(CrawlService.status(this) + "\n\n要停止吗？")
-                    .setNegativeButton("继续", null)
-                    .setPositiveButton("停止", (d, w) -> {
-                        CrawlService.stop(this);
-                        toast("已停止采集");
-                    })
-                    .show();
-            return;
-        }
-        new AlertDialog.Builder(this)
-                .setTitle("开始采集")
-                .setMessage("将在手机端逐个搜索型号并回传给服务器。\n"
-                        + "约 44 个型号，每个间隔 8 秒，全程约 6 分钟。\n"
-                        + "采集期间会显示通知，请勿强制关闭。")
-                .setNegativeButton("取消", null)
-                .setPositiveButton("开始", (d, w) -> {
-                    CrawlService.resetProgress(this);
-                    CrawlService.start(this);
-                    toast("采集已开始，可在通知栏看进度");
-                })
-                .show();
-    }
-
-
-
-    /** 后台静默同步一次在线规则（不打扰用户） */
-    private void syncAdRules() {
-        Api.bg(() -> {
-            try {
-                RuleSync.Result r = RuleSync.sync(this, false);
-                if (r.changed) Log.i("chaomi", "规则已更新: " + r.message);
-            } catch (Exception ignored) {
-            }
-        });
-    }
-
 }

@@ -1455,7 +1455,7 @@ const appDownloadPage = `<!doctype html>
   <div class="tip">安装提示：安卓默认禁止「未知来源」安装。下载后点击 APK，按提示允许「允许来自此来源的应用」即可安装。</div>
   <div class="tip" style="margin-top:10px">
     <b style="color:#e3b341">本版功能</b><br>
-    · 硬件行情：显卡/处理器/固态/内存，走势图与涨跌榜<br>
+    · <b>显卡行情</b>：Amazon 美国站 RTX 4060~5090 实时价，自动换算人民币<br>
     · 图文社区：文字/图片/链接，公众号一键转原生文章<br>
     · 账号体系：邮箱注册，发帖评论点赞记在名下<br>
     · <b>净屏</b>：无障碍自动点掉开屏广告，支持导入第三方规则<br>

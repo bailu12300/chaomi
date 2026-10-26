@@ -45,7 +45,6 @@ public class ReaderActivity extends AppCompatActivity {
 
     private boolean barHidden = false;
     private int lastScroll = 0;
-    private String lastTheme = null;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -111,14 +110,10 @@ public class ReaderActivity extends AppCompatActivity {
         }
         s.setUserAgentString(s.getUserAgentString().replace("; wv", ""));
         // 移动端 UA 才能拿到公众号的移动版排版
-        // API 29+ 让 WebView 跟随 App 的深浅色（部分站点会用到 prefers-color-scheme）
+        // 固定浅色：明确关掉 WebView 强制深色
         if (Build.VERSION.SDK_INT >= 29) {
             try {
-                if (ThemeManager.isDark(this)) {
-                    s.setForceDark(WebSettings.FORCE_DARK_ON);
-                } else {
-                    s.setForceDark(WebSettings.FORCE_DARK_OFF);
-                }
+                s.setForceDark(WebSettings.FORCE_DARK_OFF);
             } catch (Throwable ignored) {
             }
         }
@@ -154,8 +149,7 @@ public class ReaderActivity extends AppCompatActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 progress.setVisibility(View.GONE);
-                // 先套主题，再清理干扰元素
-                view.evaluateJavascript(themeJs(), null);
+                // 浅色固定，只清理干扰元素
                 view.evaluateJavascript(JS_CLEAN, null);
             }
         });
@@ -186,19 +180,6 @@ public class ReaderActivity extends AppCompatActivity {
         return androidx.core.content.ContextCompat.getColor(this, R.color.chaomi_bg);
     }
 
-    /** 主题切换后重建页面，让 WebView 背景与注入样式都更新 */
-    @Override
-    protected void onResume() {
-        super.onResume();
-        String cur = ThemeManager.mode(this);
-        if (lastTheme == null) {
-            lastTheme = cur;
-        } else if (!lastTheme.equals(cur)) {
-            lastTheme = cur;
-            recreate();
-        }
-    }
-
     private void hideBar() {
         barHidden = true;
         topBar.animate().translationY(-topBar.getHeight()).alpha(0f).setDuration(180).start();
@@ -207,55 +188,6 @@ public class ReaderActivity extends AppCompatActivity {
     private void showBar() {
         barHidden = false;
         topBar.animate().translationY(0f).alpha(1f).setDuration(180).start();
-    }
-
-    /**
-     * 主题适配脚本：让公众号正文跟随 App 的浅色/深色。
-     *
-     * 公众号正文的颜色都写死在内联样式里（#333 文字 + 白底），
-     * 直接叠加深色会变成黑底黑字。做法是用 !important 覆盖颜色，
-     * 但不动字号/间距/结构，排版保持原样。
-     */
-    private String themeJs() {
-        boolean dark = ThemeManager.isDark(this);
-        final String bg = dark ? "#0d1117" : "#ffffff";
-        final String fg = dark ? "#e6edf3" : "#1f2328";
-        final String dim = dark ? "#8b949e" : "#636c76";
-        final String codeBg = dark ? "#161b22" : "#f0f2f5";
-        final String border = dark ? "#30363d" : "#d0d7de";
-        final String link = dark ? "#58a6ff" : "#0969da";
-
-        StringBuilder css = new StringBuilder();
-        css.append("html,body{background:").append(bg).append(" !important;")
-                .append("color:").append(fg).append(" !important;}");
-        css.append("#js_content,#js_content *{color:").append(fg)
-                .append(" !important;background-color:transparent !important;}");
-        css.append("#js_content a{color:").append(link).append(" !important;}");
-        css.append("#js_content blockquote{border-left:3px solid ").append(border)
-                .append(" !important;background:").append(codeBg)
-                .append(" !important;padding:8px 12px !important;}");
-        css.append("#js_content pre,#js_content code{background:").append(codeBg)
-                .append(" !important;color:").append(fg).append(" !important;}");
-        if (dark) {
-            css.append("#js_content img{filter:brightness(.86);}");
-        }
-        css.append(".rich_media_title,#activity-name{color:").append(fg)
-                .append(" !important;}");
-        css.append("#js_name,.rich_media_meta_text{color:").append(dim)
-                .append(" !important;}");
-
-        // 用 JSON 转义避免引号/换行破坏 JS
-        String cssJson = com.google.gson.JsonParser.parseString(
-                new com.google.gson.Gson().toJson(css.toString())).toString();
-
-        return "(function(){try{"
-                + "var old=document.getElementById('__chaomi_theme');"
-                + "if(old) old.remove();"
-                + "var s=document.createElement('style');"
-                + "s.id='__chaomi_theme';"
-                + "s.textContent=" + cssJson + ";"
-                + "(document.head||document.documentElement).appendChild(s);"
-                + "}catch(e){}})();";
     }
 
     /** 注入的清理脚本：去掉干扰阅读的浮层，不改正文排版 */

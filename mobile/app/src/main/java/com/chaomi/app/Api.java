@@ -298,6 +298,35 @@ public class Api {
         return gson.fromJson(gson.toJson(root.get("data")), Article.class);
     }
 
+    // ---------- Amazon 显卡行情 ----------
+
+    static class GpuList {
+        java.util.List<GpuModel> list = new java.util.ArrayList<>();
+        GpuFx fx = new GpuFx();
+    }
+
+    public static GpuList gpuList() throws Exception {
+        String json = get(BASE + "/api/gpu/list");
+        Map<String, Object> root = gson.fromJson(json, Map.class);
+        if (root == null) throw new Exception("空响应");
+        if (err(root) != null) throw new Exception(err(root));
+        GpuList out = new GpuList();
+        Object d = root.get("data");
+        if (!(d instanceof Map)) return out;
+        Map<String, Object> dm = (Map<String, Object>) d;
+        Object l = dm.get("list");
+        if (l != null) {
+            java.util.List<GpuModel> parsed = gson.fromJson(gson.toJson(l),
+                    new com.google.gson.reflect.TypeToken<java.util.List<GpuModel>>() {}.getType());
+            if (parsed != null) out.list = parsed;
+        }
+        Object f = dm.get("fx");
+        if (f instanceof Map) {
+            out.fx = gson.fromJson(gson.toJson(f), GpuFx.class);
+        }
+        return out;
+    }
+
     // ---------- 节点监控 ----------
 
     /** 打一次心跳，返回服务端处理耗时（毫秒）。失败抛异常。 */
