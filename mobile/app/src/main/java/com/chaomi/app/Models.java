@@ -74,21 +74,33 @@ class Article {
     int count;
 }
 
-/** Amazon 显卡行情（美元原价 + 人民币换算） */
+/** 显卡行情：零售卡（Amazon）与云 GPU（VoltageGPU）统一模型 */
 class GpuModel {
     String key;
+    String kind;         // retail | cloud
+    String kindLabel;    // 零售卡 | 云GPU
     String model;        // 4060 / 5070 Ti / 5090
     String modelFull;    // RTX 5070 Ti
     String spec;
-    String title;        // Amazon 商品标题
+    String title;
     double priceUsd;
     double priceCny;
     double fxRate;
-    String asin;
-    String amazonUrl;
+    String unit;         // USD/张 或 USD/GPU/小时
+    double msrpUsd;      // 官方指导价（云 GPU 为 0）
+    double deviation;    // 与 MSRP 偏离百分比
+    boolean disputed;    // 价格有争议
+    String disputeReason;
+    String source;       // Amazon | VoltageGPU
+    String buyUrl;
+    String sourceUrl;
+    String extra;        // 云 GPU 的库存说明等
     String availability;
     String image;
     long updatedAt;
+
+    boolean isCloud() { return "cloud".equals(kind); }
+    boolean isRetail() { return "retail".equals(kind); }
 }
 
 /** 汇率信息 */

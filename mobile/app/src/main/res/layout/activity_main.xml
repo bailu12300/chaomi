@@ -251,11 +251,62 @@
                 android:scrollbars="none">
 
                 <LinearLayout
-                    android:id="@+id/catRow"
+                    android:id="@+id/gpuFilterRow"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:visibility="gone" />
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="32dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="@color/chaomi_surface_2"
+                        android:gravity="center"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:tag="all"
+                        android:text="全部"
+                        android:textColor="@color/chaomi_accent"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="32dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="@color/chaomi_surface_2"
+                        android:gravity="center"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:tag="retail"
+                        android:text="零售卡"
+                        android:textColor="@color/chaomi_text_dim"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="32dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="@color/chaomi_surface_2"
+                        android:gravity="center"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:tag="cloud"
+                        android:text="云GPU"
+                        android:textColor="@color/chaomi_text_dim"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="32dp"
+                        android:background="@color/chaomi_surface_2"
+                        android:gravity="center"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:tag="disputed"
+                        android:text="有争议"
+                        android:textColor="@color/chaomi_text_dim"
+                        android:textSize="12sp" />
+                </LinearLayout>
             </HorizontalScrollView>
 
             <LinearLayout

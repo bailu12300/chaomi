@@ -306,7 +306,15 @@ public class Api {
     }
 
     public static GpuList gpuList() throws Exception {
-        String json = get(BASE + "/api/gpu/list");
+        return gpuList("all");
+    }
+
+    public static GpuList gpuList(String kind) throws Exception {
+        String url = BASE + "/api/gpu/list";
+        if (kind != null && !kind.isEmpty() && !"all".equals(kind)) {
+            url += "?kind=" + URLEncoder.encode(kind, "UTF-8");
+        }
+        String json = get(url);
         Map<String, Object> root = gson.fromJson(json, Map.class);
         if (root == null) throw new Exception("空响应");
         if (err(root) != null) throw new Exception(err(root));

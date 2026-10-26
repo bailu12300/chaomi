@@ -3080,14 +3080,17 @@ func doServe() error {
 	}
 	log.Printf("[serve] SMTP=%v FEISHU=%v", smtpConfigured(), feishuConfigured())
 	// 清理旧的云 GPU 表（改用 Amazon 后不再使用）
+	// 旧表清理（统一到 gpu_price）
+	_, _ = db.Exec("DROP TABLE IF EXISTS amz_gpu")
+	_, _ = db.Exec("DROP TABLE IF EXISTS amz_gpu_history")
 	_, _ = db.Exec("DROP TABLE IF EXISTS cloud_gpu")
 	_, _ = db.Exec("DROP TABLE IF EXISTS cloud_gpu_history")
 
-	if err := ensureAmazonGPUSchema(db); err != nil {
+	if err := ensureGPUSchema(db); err != nil {
 		log.Printf("[serve] cloud_gpu schema: %v", err)
 	} else {
-		startAmazonLoop(db)
-		log.Printf("[serve] Amazon 显卡价采集已启动（每 2 小时一轮）")
+		startGPULoop(db)
+		log.Printf("[serve] GPU 价格采集已启动（零售卡 + 云 GPU，每 2 小时一轮）")
 	}
 	go hub.run()
 	mux.HandleFunc("/api/hw/models", func(w http.ResponseWriter, r *http.Request) { handleHWModels(db, w, r) })
@@ -3130,9 +3133,9 @@ func doServe() error {
 	mux.HandleFunc("/api/link/preview", handleLinkPreview)
 
 	// ---- 云 GPU 价格（VoltageGPU）----
-	mux.HandleFunc("/api/gpu/list", func(w http.ResponseWriter, r *http.Request) { handleAmazonGPUs(db, w, r) })
-	mux.HandleFunc("/api/gpu/history", func(w http.ResponseWriter, r *http.Request) { handleAmazonGPUHistory(db, w, r) })
-	mux.HandleFunc("/api/gpu/collect", func(w http.ResponseWriter, r *http.Request) { handleTriggerAmazon(db, w, r) })
+	mux.HandleFunc("/api/gpu/list", func(w http.ResponseWriter, r *http.Request) { handleGPUList(db, w, r) })
+	mux.HandleFunc("/api/gpu/history", func(w http.ResponseWriter, r *http.Request) { handleGPUHistory(db, w, r) })
+	mux.HandleFunc("/api/gpu/collect", func(w http.ResponseWriter, r *http.Request) { handleGPURefresh(db, w, r) })
 
 	// ---- 去广告规则库（服务端下发，客户端执行）----
 	mux.HandleFunc("/api/adrules", func(w http.ResponseWriter, r *http.Request) { handleAdRules(db, w, r) })

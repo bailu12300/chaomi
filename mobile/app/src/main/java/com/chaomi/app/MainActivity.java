@@ -40,7 +40,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
     private FloatingActionButton fab;
     private View feedPane, marketPane, feedSearchBox;
     private EditText hwSearch, feedSearch;
-    private LinearLayout catRow, tagRow;
+    private LinearLayout tagRow;
     private TextView marketHint;
 
     private final List<Post> feedList = new ArrayList<>();
@@ -49,6 +49,9 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
     private final List<GpuModel> gpuList = new ArrayList<>();
     private GpuAdapter gpuAdapter;
     private double fxRate = 0;
+    /** 来源筛选：all | retail | cloud | disputed */
+    private String gpuFilter = "all";
+    private final List<GpuModel> gpuAll = new ArrayList<>();
 
     // 信息流状态
     private String feedSort = "";     // "" | hot
@@ -87,7 +90,6 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         feedPane = findViewById(R.id.feedPane);
         marketPane = findViewById(R.id.marketPane);
         hwSearch = findViewById(R.id.hwSearch);
-        catRow = findViewById(R.id.catRow);
         tagRow = findViewById(R.id.tagRow);
         marketHint = findViewById(R.id.marketHint);
         sortLatest = findViewById(R.id.sortLatest);
@@ -111,6 +113,16 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
 
         swipe.setOnRefreshListener(this::loadFeed);
         marketSwipe.setOnRefreshListener(this::loadMarket);
+
+        // 来源筛选 chips：全部 / 零售卡 / 云GPU / 有争议
+        android.view.ViewGroup chips = findViewById(R.id.gpuFilterRow);
+        if (chips != null) {
+            for (int i = 0; i < chips.getChildCount(); i++) {
+                android.view.View v = chips.getChildAt(i);
+                if (v == null || v.getTag() == null) continue;
+                v.setOnClickListener(x -> setGpuFilter(String.valueOf(x.getTag())));
+            }
+        }
         tabFeed.setOnClickListener(v -> showFeed());
         tabMarket.setOnClickListener(v -> { showMarket(); if (!marketLoaded) loadMarket(); });
         fab.setOnClickListener(v -> openComposer());
@@ -360,42 +372,19 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
 
     private void loadMarket() {
         final String q = curQuery == null ? "" : curQuery.trim().toLowerCase();
-        final String sort = curSort;
         marketSwipe.setRefreshing(true);
         Api.bg(() -> {
             try {
-                Api.GpuList res = Api.gpuList();
-                List<GpuModel> list = new ArrayList<>(res.list);
-                // 本地搜索
-                if (!q.isEmpty()) {
-                    List<GpuModel> filtered = new ArrayList<>();
-                    for (GpuModel m : list) {
-                        String hay = ((m.model == null ? "" : m.model) + " "
-                                + (m.spec == null ? "" : m.spec) + " "
-                                + (m.title == null ? "" : m.title)).toLowerCase();
-                        if (hay.contains(q)) filtered.add(m);
-                    }
-                    list = filtered;
-                }
-                // 本地排序
-                if ("price_asc".equals(sort)) {
-                    list.sort((a, b) -> Double.compare(a.priceUsd, b.priceUsd));
-                } else if ("price_desc".equals(sort)) {
-                    list.sort((a, b) -> Double.compare(b.priceUsd, a.priceUsd));
-                } else {
-                    list.sort((a, b) -> Integer.compare(numOf(a.model), numOf(b.model)));
-                }
-                final List<GpuModel> got = list;
+                Api.GpuList res = Api.gpuList("all");
+                final List<GpuModel> got = new ArrayList<>(res.list);
                 final double rate = res.fx == null ? 0 : res.fx.rate;
                 runOnUiThread(() -> {
                     fxRate = rate;
-                    gpuList.clear();
-                    gpuList.addAll(got);
-                    gpuAdapter.notifyDataSetChanged();
+                    gpuAll.clear();
+                    gpuAll.addAll(got);
                     marketLoaded = true;
                     marketSwipe.setRefreshing(false);
-                    hwTotal = got.size();
-                    updateHint();
+                    applyGpuFilter(q);
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
@@ -404,6 +393,47 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
                 });
             }
         });
+    }
+
+    /** 按来源筛选 + 搜索 + 排序后渲染 */
+    private void applyGpuFilter(String q) {
+        String kw = q == null ? "" : q.trim().toLowerCase();
+        List<GpuModel> out = new ArrayList<>();
+        for (GpuModel m : gpuAll) {
+            if ("retail".equals(gpuFilter) && !m.isRetail()) continue;
+            if ("cloud".equals(gpuFilter) && !m.isCloud()) continue;
+            if ("disputed".equals(gpuFilter) && !m.disputed) continue;
+            if (!kw.isEmpty()) {
+                String hay = ((m.model == null ? "" : m.model) + " "
+                        + (m.spec == null ? "" : m.spec) + " "
+                        + (m.title == null ? "" : m.title)).toLowerCase();
+                if (!hay.contains(kw)) continue;
+            }
+            out.add(m);
+        }
+        // 排序：先来源（零售在前），再型号数字
+        out.sort((a, b) -> {
+            int ka = a.isCloud() ? 1 : 0, kb = b.isCloud() ? 1 : 0;
+            if (ka != kb) return ka - kb;
+            int na = numOf(a.model), nb = numOf(b.model);
+            if (na != nb) return na - nb;
+            boolean ta = a.model != null && a.model.contains("Ti");
+            boolean tb = b.model != null && b.model.contains("Ti");
+            if (ta != tb) return ta ? 1 : -1;
+            return 0;
+        });
+        gpuList.clear();
+        gpuList.addAll(out);
+        gpuAdapter.notifyDataSetChanged();
+        hwTotal = out.size();
+        updateHint();
+        highlightGpuChips();
+    }
+
+    /** 切换筛选 */
+    private void setGpuFilter(String f) {
+        gpuFilter = f;
+        applyGpuFilter(curQuery);
     }
 
     /** 型号排序权重：5070 Ti → 5070 */
@@ -421,11 +451,13 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         }
     }
 
-    /** 点击显卡：用系统浏览器打开 Amazon 商品页 */
+    /** 点击：零售卡开 Amazon，云 GPU 开 VoltageGPU */
     private void openGpu(GpuModel m) {
-        String url = (m.amazonUrl == null || m.amazonUrl.isEmpty())
-                ? "https://www.amazon.com/s?k=" + android.net.Uri.encode("RTX " + m.model)
-                : m.amazonUrl;
+        String url = m.buyUrl;
+        if (url == null || url.isEmpty()) url = m.sourceUrl;
+        if (url == null || url.isEmpty()) {
+            url = "https://www.amazon.com/s?k=" + android.net.Uri.encode("RTX " + m.model);
+        }
         try {
             startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
                     android.net.Uri.parse(url)));
@@ -434,13 +466,41 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         }
     }
 
-    private void updateHint() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Amazon 显卡 · 共 ").append(hwTotal).append(" 个型号");
-        if (fxRate > 0) {
-            sb.append(" · 汇率 1 USD ≈ ").append(String.format(java.util.Locale.CHINA, "%.2f", fxRate)).append(" CNY");
+    /** 高亮当前筛选 chip */
+    private void highlightGpuChips() {
+        android.view.ViewGroup row = findViewById(R.id.gpuFilterRow);
+        if (row == null) return;
+        for (int i = 0; i < row.getChildCount(); i++) {
+            android.view.View v = row.getChildAt(i);
+            if (!(v instanceof TextView)) continue;
+            boolean on = gpuFilter.equals(v.getTag());
+            v.setSelected(on);
+            ((TextView) v).setTextColor(ContextCompat.getColor(this,
+                    on ? R.color.chaomi_accent : R.color.chaomi_text_dim));
         }
-        if (hwUpdatedAt > 0) sb.append(" · 更新 ").append(Utils.formatTime(hwUpdatedAt));
+    }
+
+
+
+
+
+    private void updateHint() {
+        int retail = 0, cloud = 0, disputed = 0;
+        for (GpuModel m : gpuList) {
+            if (m.isCloud()) cloud++;
+            else retail++;
+            if (m.disputed) disputed++;
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("共 ").append(hwTotal).append(" 条");
+        if (hwTotal > 0) {
+            sb.append("（零售 ").append(retail).append(" · 云 ").append(cloud);
+            if (disputed > 0) sb.append(" · 有争议 ").append(disputed);
+            sb.append("）");
+        }
+        if (fxRate > 0) {
+            sb.append(" · 1 USD ≈ ").append(String.format(java.util.Locale.CHINA, "%.2f", fxRate)).append(" CNY");
+        }
         if (!curQuery.isEmpty()) sb.append(" · 搜索「").append(curQuery).append("」");
         marketHint.setText(sb.toString());
         highlightSort();
@@ -456,28 +516,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
 
 
 
-    private TextView makeChip(String label, String cat, boolean selected) {
-        TextView tv = new TextView(this);
-        tv.setText(label);
-        tv.setTextSize(12);
-        tv.setGravity(Gravity.CENTER);
-        tv.setPadding(26, 14, 26, 14);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.setMarginEnd(14);
-        tv.setLayoutParams(lp);
-        paintChip(tv, selected);
-        tv.setTag(cat);
-        tv.setOnClickListener(v -> {
-            curCat = String.valueOf(v.getTag() == null ? "" : v.getTag());
-            for (int i = 0; i < catRow.getChildCount(); i++) {
-                View c = catRow.getChildAt(i);
-                paintChip((TextView) c, c == v);
-            }
-            loadMarket();
-        });
-        return tv;
-    }
+
 
     private void paintChip(TextView tv, boolean on) {
         GradientDrawable g = new GradientDrawable();
