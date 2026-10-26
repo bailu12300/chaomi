@@ -3075,6 +3075,10 @@ func doServe() error {
 	if err := ensureAuthSchema(db); err != nil {
 		log.Printf("[serve] auth schema: %v", err)
 	}
+	if err := ensureMailSchema(db); err != nil {
+		log.Printf("[serve] mail schema: %v", err)
+	}
+	log.Printf("[serve] SMTP=%v FEISHU=%v", smtpConfigured(), feishuConfigured())
 	go hub.run()
 	mux.HandleFunc("/api/hw/models", func(w http.ResponseWriter, r *http.Request) { handleHWModels(db, w, r) })
 	mux.HandleFunc("/api/hw/status", func(w http.ResponseWriter, r *http.Request) { handleHWStatus(db, w, r) })
@@ -3132,6 +3136,14 @@ func doServe() error {
 	mux.HandleFunc("/api/auth/logout", func(w http.ResponseWriter, r *http.Request) { handleAuthLogout(db, w, r) })
 	mux.HandleFunc("/api/auth/me", func(w http.ResponseWriter, r *http.Request) { handleAuthMe(db, w, r) })
 	mux.HandleFunc("/api/auth/profile", func(w http.ResponseWriter, r *http.Request) { handleAuthProfile(db, w, r) })
+	mux.HandleFunc("/api/auth/sendcode", func(w http.ResponseWriter, r *http.Request) { handleSendCode(db, w, r) })
+	mux.HandleFunc("/api/auth/reset", func(w http.ResponseWriter, r *http.Request) { handleResetPassword(db, w, r) })
+	mux.HandleFunc("/api/auth/avatar", func(w http.ResponseWriter, r *http.Request) { handleAvatarUpload(db, w, r) })
+	mux.HandleFunc("/api/auth/checkuid", func(w http.ResponseWriter, r *http.Request) { handleCheckUID(db, w, r) })
+	mux.HandleFunc("/api/user/uid/", func(w http.ResponseWriter, r *http.Request) {
+		rest := strings.TrimPrefix(r.URL.Path, "/api/user/uid/")
+		handleUserByUID(db, w, r, strings.SplitN(rest, "/", 2)[0])
+	})
 	mux.HandleFunc("/api/user/", func(w http.ResponseWriter, r *http.Request) {
 		rest := strings.TrimPrefix(r.URL.Path, "/api/user/")
 		handleUserProfile(db, w, r, cParseID(strings.SplitN(rest, "/", 2)[0]))

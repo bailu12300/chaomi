@@ -33,10 +33,17 @@ public class Api {
     // ---------- 账号 ----------
 
     public static AuthResult register(String email, String password, String nick) throws Exception {
+        return register(email, password, nick, "");
+    }
+
+    /** 带邮箱验证码的注册 */
+    public static AuthResult register(String email, String password, String nick,
+                                      String code) throws Exception {
         Map<String, Object> b = new LinkedHashMap<>();
         b.put("email", email);
         b.put("password", password);
         b.put("nick", nick);
+        b.put("code", code == null ? "" : code);
         String json = post(BASE + "/api/auth/register", gson.toJson(b));
         return parseAuth(json);
     }
@@ -65,6 +72,85 @@ public class Api {
     public static void logout() throws Exception {
         post(BASE + "/api/auth/logout", "{}");
         setToken("");
+    }
+
+    /** 发送验证码；返回 devCode（服务端未配 SMTP 时直接给出，内测模式） */
+    public static String sendCode(String email, String purpose) throws Exception {
+        Map<String, Object> b = new LinkedHashMap<>();
+        b.put("email", email);
+        b.put("purpose", purpose);
+        String json = post(BASE + "/api/auth/sendcode", gson.toJson(b));
+        Map<String, Object> root = gson.fromJson(json, Map.class);
+        if (err(root) != null) throw new Exception(err(root));
+        Object d = root.get("data");
+        if (!(d instanceof Map)) return "";
+        Object dc = ((Map<String, Object>) d).get("devCode");
+        return dc == null ? "" : String.valueOf(dc);
+    }
+
+    /** 忘记密码：验证码 + 新密码 */
+    public static void resetPassword(String email, String code, String newPass) throws Exception {
+        Map<String, Object> b = new LinkedHashMap<>();
+        b.put("email", email);
+        b.put("code", code);
+        b.put("password", newPass);
+        String json = post(BASE + "/api/auth/reset", gson.toJson(b));
+        Map<String, Object> root = gson.fromJson(json, Map.class);
+        if (err(root) != null) throw new Exception(err(root));
+    }
+
+    /** 上传头像，返回新头像 URL */
+    public static String uploadAvatar(byte[] data, String name) throws Exception {
+        List<Part> parts = new ArrayList<>();
+        parts.add(new Part(data, name));
+        // 复用 multipart 逻辑但打到头像接口
+        String boundary = "----chaomi" + System.currentTimeMillis();
+        HttpURLConnection conn = (HttpURLConnection)
+                new URL(BASE + "/api/auth/avatar").openConnection();
+        conn.setDoOutput(true);
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+        auth(conn);
+        conn.setConnectTimeout(30000);
+        conn.setReadTimeout(60000);
+        OutputStream os = conn.getOutputStream();
+        for (Part p : parts) {
+            os.write(("--" + boundary + "\r\n").getBytes("UTF-8"));
+            os.write(("Content-Disposition: form-data; name=\"file\"; filename=\"" + p.name + "\"\r\n").getBytes("UTF-8"));
+            os.write("Content-Type: image/*\r\n\r\n".getBytes("UTF-8"));
+            os.write(p.data);
+            os.write("\r\n".getBytes("UTF-8"));
+        }
+        os.write(("--" + boundary + "--\r\n").getBytes("UTF-8"));
+        os.flush();
+        os.close();
+        String resp = read(conn);
+        Map<String, Object> root = gson.fromJson(resp, Map.class);
+        if (err(root) != null) throw new Exception(err(root));
+        Object d = root.get("data");
+        if (!(d instanceof Map)) return "";
+        Object a = ((Map<String, Object>) d).get("avatar");
+        return a == null ? "" : String.valueOf(a);
+    }
+
+    /** 查唯一号是否可用 */
+    public static boolean uidAvailable(String uid) throws Exception {
+        String json = get(BASE + "/api/auth/checkuid?uid=" + URLEncoder.encode(uid, "UTF-8"));
+        Map<String, Object> root = gson.fromJson(json, Map.class);
+        if (err(root) != null) return false;
+        Object d = root.get("data");
+        if (!(d instanceof Map)) return false;
+        Object a = ((Map<String, Object>) d).get("available");
+        return a instanceof Boolean && (Boolean) a;
+    }
+
+    /** 用唯一号读主页 */
+    public static Map<String, Object> userByUid(String uid) throws Exception {
+        String json = get(BASE + "/api/user/uid/" + URLEncoder.encode(uid, "UTF-8"));
+        Map<String, Object> root = gson.fromJson(json, Map.class);
+        if (err(root) != null) throw new Exception(err(root));
+        Object d = root.get("data");
+        return d instanceof Map ? (Map<String, Object>) d : new LinkedHashMap<>();
     }
 
     public static User me() throws Exception {

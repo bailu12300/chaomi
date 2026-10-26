@@ -1308,6 +1308,42 @@ func cParseArticle(rawURL string) (*CArticle, error) {
 
 // ===== 图片上传（供原生 App 发图帖）=====
 
+// cSaveUpload 抽出来的单文件上传逻辑，社区发帖与头像共用
+func cSaveUpload(r *http.Request, field string) (string, error) {
+	r.Body = http.MaxBytesReader(nil, r.Body, 20<<20)
+	if err := r.ParseMultipartForm(20 << 20); err != nil {
+		return "", fmt.Errorf("解析失败: %w", err)
+	}
+	files := r.MultipartForm.File[field]
+	if len(files) == 0 {
+		return "", fmt.Errorf("没有文件")
+	}
+	dir := communityDir + "/uploads"
+	_ = os.MkdirAll(dir, 0o755)
+	allowed := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true}
+	for _, fh := range files {
+		ext := strings.ToLower(filepath.Ext(fh.Filename))
+		if !allowed[ext] {
+			continue
+		}
+		src, err := fh.Open()
+		if err != nil {
+			continue
+		}
+		name := fmt.Sprintf("%d_%s%s", time.Now().UnixNano(), randStr(6), ext)
+		dst, err := os.Create(dir + "/" + name)
+		if err != nil {
+			src.Close()
+			continue
+		}
+		_, _ = io.Copy(dst, src)
+		src.Close()
+		dst.Close()
+		return "/community/uploads/" + name, nil
+	}
+	return "", fmt.Errorf("无效图片（仅支持 jpg/png/gif/webp）")
+}
+
 func handleCommunityUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)

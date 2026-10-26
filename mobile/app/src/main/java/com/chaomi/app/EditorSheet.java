@@ -175,27 +175,52 @@ public class EditorSheet extends BottomSheetDialog {
                 });
             }
 
-            final int idx = i;
-            item.findViewById(R.id.bDel).setOnClickListener(x -> {
-                blocks.remove(idx);
-                if (blocks.isEmpty()) addBlock("p");
-                else renderBlocks();
-            });
-            item.findViewById(R.id.bMoveUp).setOnClickListener(x -> {
-                if (idx <= 0) return;
-                EditBlock t = blocks.remove(idx);
-                blocks.add(idx - 1, t);
-                renderBlocks();
-            });
-            item.findViewById(R.id.bMoveDown).setOnClickListener(x -> {
-                if (idx >= blocks.size() - 1) return;
-                EditBlock t = blocks.remove(idx);
-                blocks.add(idx + 1, t);
-                renderBlocks();
-            });
+            // ★ 用对象引用而不是捕获索引：块增删后索引会错乱，导致点 ✕ 删错块或没反应。
+            // ★ 用 post 延迟到下一帧再重建视图：直接在点击回调里 removeAllViews()
+            //   会把正在分发事件的 View 拆掉，点击会被吞掉（这就是"x 不掉"的真正原因）。
+            item.findViewById(R.id.bDel).setOnClickListener(x -> removeBlock(b));
+            item.findViewById(R.id.bMoveUp).setOnClickListener(x -> moveBlock(b, -1));
+            item.findViewById(R.id.bMoveDown).setOnClickListener(x -> moveBlock(b, 1));
 
             blockList.addView(item);
         }
+    }
+
+    /** 删除块（按对象引用定位，不用索引） */
+    private void removeBlock(EditBlock b) {
+        int i = indexOfBlock(b);
+        if (i < 0) return;
+        blocks.remove(i);
+        if (blocks.isEmpty()) {
+            EditBlock nb = new EditBlock();
+            nb.type = "p";
+            blocks.add(nb);
+        }
+        postRender();
+    }
+
+    /** 移动块 */
+    private void moveBlock(EditBlock b, int delta) {
+        int i = indexOfBlock(b);
+        if (i < 0) return;
+        int j = i + delta;
+        if (j < 0 || j >= blocks.size()) return;
+        blocks.remove(i);
+        blocks.add(j, b);
+        postRender();
+    }
+
+    private int indexOfBlock(EditBlock b) {
+        for (int i = 0; i < blocks.size(); i++) {
+            if (blocks.get(i) == b) return i;
+        }
+        return -1;
+    }
+
+    /** 延迟重建，避免在点击回调里拆掉正在处理事件的 View */
+    private void postRender() {
+        if (blockList == null) return;
+        blockList.post(this::renderBlocks);
     }
 
     private String label(String t) {

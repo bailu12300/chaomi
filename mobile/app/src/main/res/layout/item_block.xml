@@ -23,30 +23,39 @@
 
         <TextView
             android:id="@+id/bMoveUp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:padding="6dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="false"
+            android:gravity="center"
             android:text="↑"
             android:textColor="@color/chaomi_text_dim"
-            android:textSize="13sp" />
+            android:textSize="17sp" />
 
         <TextView
             android:id="@+id/bMoveDown"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:padding="6dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="false"
+            android:gravity="center"
             android:text="↓"
             android:textColor="@color/chaomi_text_dim"
-            android:textSize="13sp" />
+            android:textSize="17sp" />
 
         <TextView
             android:id="@+id/bDel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:padding="6dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="false"
+            android:gravity="center"
             android:text="✕"
             android:textColor="@color/chaomi_down"
-            android:textSize="13sp" />
+            android:textSize="17sp" />
     </LinearLayout>
 
     <EditText

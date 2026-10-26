@@ -171,27 +171,8 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
             promptLogin();
             return;
         }
-        new AlertDialog.Builder(this)
-                .setTitle(Session.nick(this))
-                .setMessage(Session.email(this) + "\n\n要退出登录吗？")
-                .setNegativeButton("取消", null)
-                .setNeutralButton("我的内容", (d, w) -> {
-                    feedMine = true;
-                    feedSort = "";
-                    showFeed();
-                    loadFeed();
-                })
-                .setPositiveButton("退出", (d, w) -> Api.bg(() -> {
-                    try { Api.logout(); } catch (Exception ignored) { }
-                    runOnUiThread(() -> {
-                        Session.clear(this);
-                        paintAccount();
-                        feedMine = false;
-                        loadFeed();
-                        toast("已退出登录");
-                    });
-                }))
-                .show();
+        // 已登录 → 打开个人主页（改头像/昵称/看自己的内容/退出）
+        startActivity(new Intent(this, ProfileActivity.class));
     }
 
     private void promptLogin() {

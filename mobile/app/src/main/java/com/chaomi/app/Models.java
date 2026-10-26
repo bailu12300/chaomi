@@ -77,6 +77,7 @@ class LinkCard {
 /** 账号 */
 class User {
     long id;
+    String uid;       // 唯一号 CM123456
     String email;
     String nick;
     String avatar;
@@ -84,6 +85,8 @@ class User {
     long createdAt;
     long lastLogin;
     int postCount;
+    String regIp;
+    String lastIp;
 }
 
 /** 登录 / 注册返回 */

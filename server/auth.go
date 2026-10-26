@@ -27,10 +27,13 @@ import (
 
 type CUser struct {
 	ID        int64  `json:"id"`
+	UID       string `json:"uid"`   // 唯一用户号，如 CM123456
 	Email     string `json:"email"`
 	Nick      string `json:"nick"`
 	Avatar    string `json:"avatar,omitempty"`
 	Bio       string `json:"bio,omitempty"`
+	RegIP     string `json:"regIp,omitempty"`
+	LastIP    string `json:"lastIp,omitempty"`
 	CreatedAt int64  `json:"createdAt"`
 	LastLogin int64  `json:"lastLogin,omitempty"`
 	PostCount int    `json:"postCount"`
@@ -156,16 +159,21 @@ func cUserByToken(db *sql.DB, tok string) *CUser {
 	}
 	var u CUser
 	var avatar, bio sql.NullString
+	var uid, regIp, lastIp sql.NullString
 	err := db.QueryRow(`
-		SELECT u.id,u.email,u.nick,u.avatar,u.bio,u.created_at,u.last_login
+		SELECT u.id,u.email,u.nick,u.avatar,u.bio,u.created_at,u.last_login,u.uid,u.reg_ip,u.last_ip
 		FROM c_sessions s JOIN c_users u ON u.id=s.user_id
 		WHERE s.token=? AND s.expires_at>?`, tok, time.Now().UnixMilli()).
-		Scan(&u.ID, &u.Email, &u.Nick, &avatar, &bio, &u.CreatedAt, &u.LastLogin)
+		Scan(&u.ID, &u.Email, &u.Nick, &avatar, &bio, &u.CreatedAt, &u.LastLogin,
+			&uid, &regIp, &lastIp)
 	if err != nil {
 		return nil
 	}
 	u.Avatar = avatar.String
 	u.Bio = bio.String
+	u.UID = uid.String
+	u.RegIP = regIp.String
+	u.LastIP = lastIp.String
 	return &u
 }
 
@@ -208,6 +216,7 @@ func handleAuthRegister(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 		Nick     string `json:"nick"`
+		Code     string `json:"code"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 		writeJSON(w, 400, map[string]string{"error": "请求体解析失败"})
@@ -223,6 +232,13 @@ func handleAuthRegister(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "密码至少 6 位"})
 		return
 	}
+	// 验证码：配置了 SMTP 就必须校验；未配置时放行（内测模式，响应里会标注）
+	if smtpConfigured() {
+		if !verifyCode(db, b.Email, "register", b.Code) {
+			writeJSON(w, 400, map[string]string{"error": "验证码不正确或已过期"})
+			return
+		}
+	}
 	if b.Nick == "" {
 		b.Nick = strings.Split(b.Email, "@")[0]
 	}
@@ -237,8 +253,11 @@ func handleAuthRegister(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	}
 	salt := cRandHex(16)
 	now := time.Now().UnixMilli()
-	res, err := db.Exec(`INSERT INTO c_users(email,nick,pass_hash,salt,created_at,last_login)
-		VALUES(?,?,?,?,?,?)`, b.Email, b.Nick, cHashPassword(b.Password, salt), salt, now, now)
+	uid := newUID(db)
+	ip := clientIP(r)
+	res, err := db.Exec(`INSERT INTO c_users(email,nick,pass_hash,salt,created_at,last_login,uid,reg_ip,last_ip)
+		VALUES(?,?,?,?,?,?,?,?,?)`, b.Email, b.Nick, cHashPassword(b.Password, salt),
+		salt, now, now, uid, ip, ip)
 	if err != nil {
 		writeJSON(w, 500, map[string]string{"error": "注册失败：" + err.Error()})
 		return
@@ -249,7 +268,10 @@ func handleAuthRegister(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]string{"error": "会话创建失败"})
 		return
 	}
-	u := CUser{ID: id, Email: b.Email, Nick: b.Nick, CreatedAt: now, LastLogin: now}
+	u := CUser{ID: id, UID: uid, Email: b.Email, Nick: b.Nick,
+		RegIP: ip, LastIP: ip, CreatedAt: now, LastLogin: now}
+	feishuNotify("超米 · 新用户注册",
+		fmt.Sprintf("邮箱 %s\n昵称 %s\nUID %s\nIP %s", b.Email, b.Nick, uid, ip))
 	writeJSON(w, 201, map[string]interface{}{"code": 0, "data": map[string]interface{}{"token": tok, "user": u}})
 }
 
@@ -268,10 +290,11 @@ func handleAuthLogin(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	}
 	b.Email = strings.ToLower(strings.TrimSpace(b.Email))
 	var u CUser
-	var hash, salt, avatar, bio sql.NullString
-	err := db.QueryRow(`SELECT id,email,nick,pass_hash,salt,avatar,bio,created_at
+	var hash, salt, avatar, bio, uid, regIp, lastIp sql.NullString
+	err := db.QueryRow(`SELECT id,email,nick,pass_hash,salt,avatar,bio,created_at,uid,reg_ip,last_ip
 		FROM c_users WHERE email=?`, b.Email).
-		Scan(&u.ID, &u.Email, &u.Nick, &hash, &salt, &avatar, &bio, &u.CreatedAt)
+		Scan(&u.ID, &u.Email, &u.Nick, &hash, &salt, &avatar, &bio, &u.CreatedAt,
+			&uid, &regIp, &lastIp)
 	if err != nil {
 		writeJSON(w, 401, map[string]string{"error": "邮箱或密码错误"})
 		return
@@ -287,10 +310,14 @@ func handleAuthLogin(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UnixMilli()
-	_, _ = db.Exec(`UPDATE c_users SET last_login=? WHERE id=?`, now, u.ID)
+	ip := clientIP(r)
+	_, _ = db.Exec(`UPDATE c_users SET last_login=?, last_ip=? WHERE id=?`, now, ip, u.ID)
 	u.LastLogin = now
 	u.Avatar = avatar.String
 	u.Bio = bio.String
+	u.UID = uid.String
+	u.RegIP = regIp.String
+	u.LastIP = ip
 	_ = db.QueryRow(`SELECT COUNT(*) FROM c_posts WHERE user_id=?`, u.ID).Scan(&u.PostCount)
 	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": map[string]interface{}{"token": tok, "user": u}})
 }
@@ -735,15 +762,19 @@ func handleCommunityDeleteComment(db *sql.DB, w http.ResponseWriter, r *http.Req
 func handleUserProfile(db *sql.DB, w http.ResponseWriter, r *http.Request, id int64) {
 	var u CUser
 	var avatar, bio sql.NullString
-	err := db.QueryRow(`SELECT id,email,nick,avatar,bio,created_at FROM c_users WHERE id=?`, id).
-		Scan(&u.ID, &u.Email, &u.Nick, &avatar, &bio, &u.CreatedAt)
+	var uid sql.NullString
+	err := db.QueryRow(`SELECT id,email,nick,avatar,bio,created_at,uid FROM c_users WHERE id=?`, id).
+		Scan(&u.ID, &u.Email, &u.Nick, &avatar, &bio, &u.CreatedAt, &uid)
 	if err != nil {
 		writeJSON(w, 404, map[string]string{"error": "用户不存在"})
 		return
 	}
 	u.Avatar = avatar.String
 	u.Bio = bio.String
+	u.UID = uid.String
 	u.Email = "" // 不对外暴露邮箱
+	u.RegIP = "" // 不对外暴露 IP
+	u.LastIP = ""
 	posts, _ := cListPostsEx(db, 0, 30, "", "", id, "")
 	_ = db.QueryRow(`SELECT COUNT(*) FROM c_posts WHERE user_id=?`, id).Scan(&u.PostCount)
 	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": map[string]interface{}{
