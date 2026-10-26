@@ -29,9 +29,13 @@ if r.returncode != 0:
     sys.exit("zipalign failed")
 
 print("== 2) apksigner ==")
+# ★ 必须显式传 --min-sdk-version：否则 apksigner 从 manifest 读到 minSdk>=24
+#   就认为 v1 不必要而**静默跳过 v1 签名**，导致部分国产 ROM / 侧载渠道报
+#   「解析软件包时出现问题」。这里固定按 API 21 生成，保证 v1+v2+v3 全齐。
 r = subprocess.run([BT + "/apksigner.bat", "sign",
                     "--ks", KS, "--ks-pass", "pass:zaoba123",
                     "--key-pass", "pass:zaoba123",
+                    "--min-sdk-version", "21",
                     "--v1-signing-enabled", "true",
                     "--v2-signing-enabled", "true",
                     "--v3-signing-enabled", "true",
@@ -42,9 +46,19 @@ if r.returncode != 0 or not os.path.exists(final):
     sys.exit("apksigner failed")
 
 print("== 3) verify ==")
-r = subprocess.run([BT + "/apksigner.bat", "verify", "--print-certs", final],
+r = subprocess.run([BT + "/apksigner.bat", "verify", "--min-sdk-version", "21",
+                    "--verbose", "--print-certs", final],
                    capture_output=True, text=True, env=env)
-print(r.stdout.strip()[:300])
+out = r.stdout
+print(out.strip()[:600])
+# 硬校验：三种签名方案必须全部有效，否则直接失败，不推坏包
+for scheme in ["v1 scheme (JAR signing)", "v2 scheme", "v3 scheme"]:
+    line = [l for l in out.splitlines() if scheme in l]
+    if not line or "true" not in line[0]:
+        sys.exit("签名校验失败：%s 未生效 → %s" % (scheme, line))
+if "Verifies" not in out:
+    sys.exit("签名校验失败：apksigner verify 未通过")
+print("[OK] v1 + v2 + v3 全部有效")
 size = os.path.getsize(final)
 print("apk size:", size)
 

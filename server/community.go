@@ -1315,13 +1315,29 @@ const appDownloadPage = `<!doctype html>
   .btn:active{background:#2ea043}
   .meta{margin-top:16px;color:#8b949e;font-size:12px;line-height:1.7}
   .tip{margin-top:14px;background:#1c2128;border:1px solid #30363d;border-radius:10px;padding:12px;font-size:12px;color:#c9d1d9;text-align:left}
+  details{margin-top:12px;background:#1c2128;border:1px solid #30363d;border-radius:10px;padding:12px;font-size:12px;color:#c9d1d9;text-align:left}
+  summary{cursor:pointer;color:#58a6ff;font-weight:600;outline:none}
+  details ol{margin:8px 0 0;padding-left:18px;line-height:1.9}
+  details b{color:#e3b341}
+  code{background:#0d1117;padding:1px 5px;border-radius:4px;color:#a5d6ff;font-size:11px}
 </style></head>
 <body><div class="card">
   <h1>早八社区</h1>
   <div class="sub">硬件行情 · 图文社区 · 实时互动</div>
   <a class="btn" href="/downloads/__APK__">⬇ 下载安卓 App（APK）</a>
-  <div class="meta">版本 __VER__ · 原生应用 · 支持 Android 8.0+</div>
+  <div class="meta">版本 __VER__ · 原生应用 · 支持 Android 7.0+</div>
   <div class="tip">安装提示：安卓默认禁止「未知来源」安装。下载后点击 APK，按提示允许「允许来自此来源的应用」即可安装。</div>
+  <details>
+    <summary>装不上？点这里看排查步骤</summary>
+    <ol>
+      <li><b>之前装过旧版</b>（包名 <code>com.zaoba.community</code>）：先在桌面长按图标 → 卸载，再装这个包。旧版如果换了签名，不卸载会报「应用未安装」。</li>
+      <li><b>提示「解析软件包时出现问题」</b>：多半是下载不完整。用浏览器重新下载，别用微信/QQ 内置浏览器直接装 —— 它们会把文件改名或拦截。</li>
+      <li><b>华为 / 荣耀</b>：设置 → 系统和更新 → 纯净模式 → 关闭；或在「应用管控中心」里放行。</li>
+      <li><b>小米 / Redmi</b>：设置 → 应用设置 → 应用管理 → 右上角 → 特殊权限 → 安装未知应用 → 允许浏览器。</li>
+      <li><b>OPPO / vivo / 一加</b>：安装时勾选「允许来自此来源」，或临时关闭「安全检查」。</li>
+      <li><b>提示「存储空间不足」或「与已安装应用冲突」</b>：清一次桌面残留图标后重启再装。</li>
+    </ol>
+  </details>
 </div></body></html>`
 
 // latestAPK 取 downloads 目录里最新的 APK（按修改时间），避免每次发版改代码。
