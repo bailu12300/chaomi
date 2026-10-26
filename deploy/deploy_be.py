@@ -65,7 +65,17 @@ finally:
 print("== 3) 启动 ==")
 c = connect()
 try:
-    run_noread(c, "cd /opt/cm-pricesite && setsid ./bin/cmpricesite serve > bin/serve.log 2>&1 < /dev/null &")
+    # ★ 必须先把 cm01.env / db.conf 注入环境再启动：
+    #   setsid 起来的进程不会自动读 env 文件，否则 HW_CRAWLER_KEY / CM_DB_DSN 全为空。
+    start_cmd = (
+        "cd /opt/cm-pricesite && "
+        "ENV_ARGS=''; "
+        "if [ -f cm01.env ]; then set -a; . ./cm01.env; set +a; fi; "
+        "if [ -z \"$CM_DB_DSN\" ] && [ -f db.conf ]; then "
+        "  export CM_DB_DSN=\"$(cat db.conf)\"; fi; "
+        "setsid ./bin/cmpricesite serve > bin/serve.log 2>&1 < /dev/null &"
+    )
+    run_noread(c, start_cmd)
 finally:
     c.close()
 

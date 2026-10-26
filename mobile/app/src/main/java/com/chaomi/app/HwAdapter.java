@@ -49,8 +49,14 @@ public class HwAdapter extends RecyclerView.Adapter<HwAdapter.VH> {
             h.price.setTextColor(0xFFe6edf3);
         }
 
-        // 涨跌徽标：涨=红、跌=绿（国内习惯），无变化则灰
+        // 涨跌徽标：涨=红、跌=绿（国内习惯）。同时显示实际差价与百分比
         String pct = m.hasChange ? String.format(java.util.Locale.US, "%+.2f%%", m.changePct) : "";
+        if (m.hasChange && m.changeAbs != 0) {
+            String abs = Math.abs(m.changeAbs) >= 100
+                    ? String.format(java.util.Locale.US, "%+.0f", m.changeAbs)
+                    : String.format(java.util.Locale.US, "%+.2f", m.changeAbs);
+            pct = abs + " / " + pct;
+        }
         if ("up".equals(m.trend)) {
             h.trend.setText(pct.isEmpty() ? "↑ 涨" : "↑ " + pct);
             h.trend.setTextColor(0xFFf85149);

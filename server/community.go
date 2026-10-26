@@ -249,7 +249,9 @@ type hwItem struct {
 	Trend       string    `json:"trend"`
 	PrevPrice   any       `json:"prevPrice"`
 	ChangePct   float64   `json:"changePct"`
+	ChangeAbs   float64   `json:"changeAbs"` // 实际差价 = 现价 - 上轮价
 	HasChange   bool      `json:"hasChange"`
+	PrevRoundAt int64     `json:"prevRoundAt"` // 上轮采集时间（毫秒），0 表示无可比轮次
 	Trends      []float64 `json:"trends"`
 	NoMatch     bool      `json:"noMatch"`
 	UpdatedAt   int64     `json:"updatedAt"`
@@ -261,6 +263,7 @@ type hwChg struct {
 	From float64
 	To   float64
 	Pct  float64
+	At   int64 // 上轮采集时间（秒）
 }
 
 // hwStableKey 稳定身份：row_key 跨轮次会变（早期是 gpu-rtx-50 这类系列键，
@@ -344,7 +347,14 @@ func hwRoundChanges(db *sql.DB) map[string]hwChg {
 		if first <= 0 || first == last {
 			continue
 		}
-		out[k] = hwChg{From: first, To: last, Pct: (last - first) / first * 100}
+		// At = 上一轮的采集时间，供前端展示「相比 M-d HH:mm」。
+		// 注意取倒数第二个时间点，那才是「上轮」。
+		out[k] = hwChg{
+			From: first,
+			To:   last,
+			Pct:  (last - first) / first * 100,
+			At:   tss[len(tss)-2],
+		}
 	}
 	return out
 }
@@ -400,13 +410,29 @@ func handleHWModels(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 			it.PriceStatus = "ok"
 			if c, ok := chgs[it.Key]; ok {
 				it.ChangePct = math.Round(c.Pct*100) / 100
+				it.ChangeAbs = math.Round((c.To-c.From)*100) / 100
+				it.PrevPrice = c.From
 				it.HasChange = hwPlausible(it.ChangePct)
+				if it.HasChange {
+					it.PrevRoundAt = c.At * 1000
+				}
 			} else if prevPrice.Valid && prevPrice.Float64 > 0 {
 				it.ChangePct = math.Round((price.Float64-prevPrice.Float64)/prevPrice.Float64*10000) / 100
+				it.ChangeAbs = math.Round((price.Float64-prevPrice.Float64)*100) / 100
 				it.HasChange = hwPlausible(it.ChangePct)
 			}
 			if !it.HasChange {
 				it.ChangePct = 0
+				it.ChangeAbs = 0
+			}
+			// 涨跌方向以服务端算出的为准，修正采集端可能留空的 trend
+			switch {
+			case it.ChangeAbs > 0:
+				it.Trend = "up"
+			case it.ChangeAbs < 0:
+				it.Trend = "down"
+			case it.HasChange:
+				it.Trend = "flat"
 			}
 			spark := []float64{}
 			if prevPrice.Valid && prevPrice.Float64 > 0 {
@@ -645,11 +671,36 @@ func handleHWHistory(db *sql.DB, w http.ResponseWriter, r *http.Request, key str
 		chg = math.Round((last-data[0].Ref)*100) / 100
 		chgPct = math.Round(chg/data[0].Ref*10000) / 100
 	}
+
+	// 上轮对比：用最后两个点（最近一次采集 vs 上一次采集）
+	prevPrice := 0.0
+	prevAt := int64(0)
+	prevDiff := 0.0
+	prevPct := 0.0
+	hasPrev := false
+	if n := len(data); n >= 2 {
+		prevPrice = data[n-2].Ref
+		prevAt = data[n-2].Ts
+		if prevPrice > 0 {
+			prevDiff = math.Round((last-prevPrice)*100) / 100
+			prevPct = math.Round(prevDiff/prevPrice*10000) / 100
+			hasPrev = hwPlausible(prevPct)
+		}
+	}
+
 	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": map[string]interface{}{
 		"points": data,
 		"stats": map[string]interface{}{
 			"min": minP, "max": maxP, "avg": avg, "last": last,
 			"count": len(data), "change": chg, "changePct": chgPct,
+		},
+		// 与上一轮采集的对比：diff 是实际差价，pct 是百分比
+		"prevRound": map[string]interface{}{
+			"price":   prevPrice,
+			"at":      prevAt * 1000,
+			"diff":    prevDiff,
+			"pct":     prevPct,
+			"hasPrev": hasPrev,
 		},
 	}})
 }

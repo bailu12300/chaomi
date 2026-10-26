@@ -80,6 +80,12 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- 采集服务（手机端抓取，前台跑） -->
+        <service
+            android:name=".CrawlService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <!-- 常驻前台服务 -->
         <service
             android:name=".KeepAliveService"

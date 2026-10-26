@@ -48,6 +48,11 @@ public class ModelDetailActivity extends AppCompatActivity {
         TextView sMax = findViewById(R.id.sMax);
         TextView sAvg = findViewById(R.id.sAvg);
         TextView sCount = findViewById(R.id.sCount);
+        TextView pPrev = findViewById(R.id.pPrev);
+        TextView pPrevLabel = findViewById(R.id.pPrevLabel);
+        TextView pDiff = findViewById(R.id.pDiff);
+        TextView pPct = findViewById(R.id.pPct);
+        TextView prevTitle = findViewById(R.id.prevTitle);
         MaterialButton btnPost = findViewById(R.id.btnPost);
 
         dCat.setText(cat == null ? "" : cat);
@@ -58,8 +63,9 @@ public class ModelDetailActivity extends AppCompatActivity {
         dShop.setText((platform == null ? "" : platform) + " · " + (shop == null ? "" : shop));
         dTitle.setText(title == null || title.isEmpty() ? "" : "商品标题：" + title);
 
+        double absDiff = getIntent().getDoubleExtra("changeAbs", 0);
         if (hasChange && pct != 0) {
-            dChange.setText(String.format(Locale.US, "%+.2f%%", pct));
+            dChange.setText(money(absDiff) + "　" + String.format(Locale.US, "%+.2f%%", pct));
             dChange.setTextColor(pct > 0 ? 0xFFf85149 : 0xFF3fb950);
         } else {
             dChange.setText("较上一轮持平");
@@ -87,6 +93,26 @@ public class ModelDetailActivity extends AppCompatActivity {
                 List<HwPoint> pts = h.points;
                 runOnUiThread(() -> {
                     chart.setPoints(pts);
+                    // 对比上轮：上轮价 / 实际差价 / 涨跌幅
+                    if (h.hasPrev && h.prevPrice > 0) {
+                        pPrev.setText(money(h.prevPrice));
+                        pPrevLabel.setText(h.prevAt > 0
+                                ? Utils.formatTime(h.prevAt) + " 价" : "上轮价");
+                        pDiff.setText((h.prevDiff > 0 ? "+" : "") + money(h.prevDiff));
+                        pPct.setText(String.format(Locale.US, "%+.2f%%", h.prevPct));
+                        int col = h.prevDiff > 0 ? 0xFFf85149
+                                : h.prevDiff < 0 ? 0xFF3fb950 : 0xFF8b949e;
+                        pDiff.setTextColor(col);
+                        pPct.setTextColor(col);
+                        prevTitle.setText(h.prevDiff > 0 ? "对比上轮 · 涨价"
+                                : h.prevDiff < 0 ? "对比上轮 · 降价" : "对比上轮 · 持平");
+                    } else {
+                        pPrev.setText("—");
+                        pDiff.setText("—");
+                        pPct.setText("—");
+                        prevTitle.setText("对比上轮 · 暂无上一轮数据");
+                    }
+
                     sMin.setText(h.min > 0 ? String.format(Locale.CHINA, "¥%.0f", h.min) : "—");
                     sMax.setText(h.max > 0 ? String.format(Locale.CHINA, "¥%.0f", h.max) : "—");
                     sAvg.setText(h.avg > 0 ? String.format(Locale.CHINA, "¥%.0f", h.avg) : "—");
@@ -101,4 +127,11 @@ public class ModelDetailActivity extends AppCompatActivity {
     private String nick() {
         return getSharedPreferences("chaomi", Context.MODE_PRIVATE).getString("nick", "匿名");
     }
+
+    /** 金额格式：带 ¥，保留两位以内小数 */
+    private String money(double v) {
+        if (Math.abs(v) >= 100) return String.format(Locale.CHINA, "¥%.0f", v);
+        return String.format(Locale.CHINA, "¥%.2f", v);
+    }
+
 }

@@ -3109,6 +3109,10 @@ func doServe() error {
 	})
 	mux.HandleFunc("/api/article/parse", func(w http.ResponseWriter, r *http.Request) { handleArticleParse(w, r) })
 
+	// ---- 采集端（App 回传）----
+	mux.HandleFunc("/api/crawler/targets", func(w http.ResponseWriter, r *http.Request) { handleCrawlerTargets(db, w, r) })
+	mux.HandleFunc("/api/hw/ingest", func(w http.ResponseWriter, r *http.Request) { handleHWCrawlerIngest(db, w, r) })
+
 	// ---- 节点监控 ----
 	mux.HandleFunc("/api/ping", handlePing)
 	mux.HandleFunc("/api/ping/report", handlePingReport)

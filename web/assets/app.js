@@ -541,8 +541,14 @@
       box.innerHTML = models.map((m, i) => {
         const price = m.price == null ? "暂无准确报价" : "¥" + Number(m.price).toLocaleString();
         const cls = m.trend === "up" ? "up" : m.trend === "down" ? "down" : "flat";
-        const chg = m.hasChange && m.changePct
-          ? `<span class="mchg ${cls}">${m.changePct > 0 ? "+" : ""}${Number(m.changePct).toFixed(2)}%</span>` : "";
+        let chg = "";
+        if (m.hasChange && m.changePct) {
+          const pctTxt = `${m.changePct > 0 ? "+" : ""}${Number(m.changePct).toFixed(2)}%`;
+          const abs = Number(m.changeAbs || 0);
+          const absTxt = abs === 0 ? "" :
+            `${abs > 0 ? "+" : ""}${Math.abs(abs) >= 100 ? abs.toFixed(0) : abs.toFixed(2)}`;
+          chg = `<span class="mchg ${cls}">${absTxt ? absTxt + " / " : ""}${pctTxt}</span>`;
+        }
         return `<div class="mcard" data-i="${i}"><div class="mname">${esc(m.model || m.key)}</div>
           <div class="mspec">${esc(m.spec || "")} · ${esc(m.catLabel || "")}</div>
           <div class="mprice ${cls}">${price}${chg}</div>
@@ -629,8 +635,18 @@
       const d = j.data || {};
       const pts = d.points || [], s = d.stats || {};
       const fmtY = (v) => v > 0 ? "¥" + Number(v).toLocaleString() : "—";
+      const pr = d.prevRound || {};
+      const hasPrev = pr.hasPrev && Number(pr.price) > 0;
+      const pcol = (pr.diff || 0) > 0 ? "var(--up)" : (pr.diff || 0) < 0 ? "var(--down)" : "var(--mut)";
+      const prevBlock = `
+        <div class="prevrow">
+          <div><b>${hasPrev ? fmtY(pr.price) : "—"}</b><span>上轮价</span></div>
+          <div><b style="color:${hasPrev ? pcol : "var(--mut)"}">${hasPrev ? ((pr.diff > 0 ? "+" : "") + fmtY(pr.diff)) : "—"}</b><span>实际差价</span></div>
+          <div><b style="color:${hasPrev ? pcol : "var(--mut)"}">${hasPrev ? ((pr.pct > 0 ? "+" : "") + Number(pr.pct).toFixed(2) + "%") : "—"}</b><span>涨跌幅</span></div>
+        </div>`;
       $("#mdlChart").innerHTML = `
         ${sparkSVG(pts)}
+        ${prevBlock}
         <div class="mdl-stats">
           <div><b>${fmtY(s.min)}</b><span>历史最低</span></div>
           <div><b>${fmtY(s.max)}</b><span>历史最高</span></div>

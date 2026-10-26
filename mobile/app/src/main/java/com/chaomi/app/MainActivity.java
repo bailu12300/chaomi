@@ -114,6 +114,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
                 startActivity(new Intent(this, AdSkipActivity.class)));
         findViewById(R.id.btnNode).setOnClickListener(v ->
                 startActivity(new Intent(this, NodeActivity.class)));
+        findViewById(R.id.btnCrawl).setOnClickListener(v -> onCrawlClick());
 
         fLatest.setOnClickListener(v -> { feedSort = ""; feedMine = false; loadFeed(); });
         fHot.setOnClickListener(v -> { feedSort = "hot"; feedMine = false; loadFeed(); });
@@ -231,6 +232,8 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         super.onResume();
         Session.restore(this);
         paintAccount();
+        // 采集结束回来时刷新行情，让新抓的数据立刻可见
+        if (marketLoaded && !CrawlService.isRunning(this)) loadMarket();
     }
 
     // ---------- 视图切换 ----------
@@ -493,6 +496,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         i.putExtra("title", m.title);
         i.putExtra("price", Utils.priceStr(m.price));
         i.putExtra("changePct", m.changePct);
+        i.putExtra("changeAbs", m.changeAbs);
         i.putExtra("hasChange", m.hasChange);
         startActivity(i);
     }
@@ -565,5 +569,35 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
             AdSkipPrefs.sp(this).edit().putBoolean("asked", true).apply();
         }
     }
+
+
+    /** 采集按钮：启动/停止 + 状态 */
+    private void onCrawlClick() {
+        if (CrawlService.isRunning(this)) {
+            new AlertDialog.Builder(this)
+                    .setTitle("正在采集")
+                    .setMessage(CrawlService.status(this) + "\n\n要停止吗？")
+                    .setNegativeButton("继续", null)
+                    .setPositiveButton("停止", (d, w) -> {
+                        CrawlService.stop(this);
+                        toast("已停止采集");
+                    })
+                    .show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("开始采集")
+                .setMessage("将在手机端逐个搜索型号并回传给服务器。\n"
+                        + "约 44 个型号，每个间隔 8 秒，全程约 6 分钟。\n"
+                        + "采集期间会显示通知，请勿强制关闭。")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("开始", (d, w) -> {
+                    CrawlService.resetProgress(this);
+                    CrawlService.start(this);
+                    toast("采集已开始，可在通知栏看进度");
+                })
+                .show();
+    }
+
 
 }

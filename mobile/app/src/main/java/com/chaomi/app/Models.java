@@ -96,7 +96,9 @@ class HwModel {
     Object price;         // Double 或 null
     Object prevPrice;     // Double 或 null
     double changePct;     // 涨跌幅（%）
+    double changeAbs;     // 实际差价 = 现价 - 上轮价
     boolean hasChange;
+    long prevRoundAt;     // 上轮采集时间（ms）
     java.util.List<Double> trends;
     boolean noMatch;
     long updatedAt;
@@ -121,4 +123,8 @@ class HwHistory {
     java.util.List<HwPoint> points;
     double min, max, avg, last, change, changePct;
     int count;
+    // 上轮对比
+    double prevPrice, prevDiff, prevPct;
+    long prevAt;
+    boolean hasPrev;
 }

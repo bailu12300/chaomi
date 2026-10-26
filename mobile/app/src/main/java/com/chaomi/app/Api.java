@@ -309,6 +309,17 @@ public class Api {
             h.changePct = num(s.get("changePct"));
             h.count = (int) num(s.get("count"));
         }
+        // 上轮对比
+        Object pr = d.get("prevRound");
+        if (pr instanceof Map) {
+            Map<String, Object> pm = (Map<String, Object>) pr;
+            h.prevPrice = num(pm.get("price"));
+            h.prevDiff = num(pm.get("diff"));
+            h.prevPct = num(pm.get("pct"));
+            h.prevAt = (long) num(pm.get("at"));
+            Object hp = pm.get("hasPrev");
+            h.hasPrev = hp instanceof Boolean && (Boolean) hp;
+        }
         return h;
     }
 
