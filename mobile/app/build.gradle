@@ -3,17 +3,17 @@ plugins {
 }
 
 android {
-    namespace 'com.zaoba.community'
+    namespace 'com.chaomi.app'
     compileSdk 35
 
     defaultConfig {
-        applicationId 'com.zaoba.community'
-        minSdk 24
+        applicationId 'com.chaomi.app'
+        minSdk 21
         targetSdk 35
-        versionCode 6
-        versionName '1.3.1'
+        versionCode 7
+        versionName '2.0.0'
         vectorDrawables {
-            useSupportLibrary false
+            useSupportLibrary true
         }
     }
 

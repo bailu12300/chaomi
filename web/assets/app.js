@@ -1,4 +1,4 @@
-// 早八社区 SPA —— 文字/图片/链接/公众号图文，实时 WebSocket
+// 超米 SPA —— 文字/图片/链接/公众号图文，实时 WebSocket
 (function () {
   "use strict";
   const API = ""; // 同源

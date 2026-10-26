@@ -4,9 +4,9 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_margin="6dp"
-    app:cardBackgroundColor="@color/zaoba_surface"
+    app:cardBackgroundColor="@color/chaomi_surface"
     app:cardCornerRadius="14dp"
-    app:strokeColor="@color/zaoba_border"
+    app:strokeColor="@color/chaomi_border"
     app:strokeWidth="1dp">
 
     <LinearLayout
@@ -26,8 +26,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textSize="11sp"
-                app:chipBackgroundColor="@color/zaoba_surface_2"
-                android:textColor="@color/zaoba_gold" />
+                app:chipBackgroundColor="@color/chaomi_surface_2"
+                android:textColor="@color/chaomi_gold" />
 
             <TextView
                 android:id="@+id/hwModel"
@@ -35,7 +35,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="8dp"
-                android:textColor="@color/zaoba_text"
+                android:textColor="@color/chaomi_text"
                 android:textSize="15sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -45,7 +45,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:textColor="@color/zaoba_text_dim"
+            android:textColor="@color/chaomi_text_dim"
             android:textSize="12sp" />
 
         <LinearLayout
@@ -60,7 +60,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:textColor="@color/zaoba_text"
+                android:textColor="@color/chaomi_text"
                 android:textSize="22sp"
                 android:textStyle="bold" />
 

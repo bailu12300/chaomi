@@ -4,7 +4,7 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:padding="10dp"
-    android:background="@color/zaoba_surface_2"
+    android:background="@color/chaomi_surface_2"
     android:layout_marginBottom="6dp">
 
     <LinearLayout
@@ -18,7 +18,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textColor="@color/zaoba_accent"
+            android:textColor="@color/chaomi_accent"
             android:textSize="13sp"
             android:textStyle="bold" />
 
@@ -26,7 +26,7 @@
             android:id="@+id/cTime"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/zaoba_text_dim"
+            android:textColor="@color/chaomi_text_dim"
             android:textSize="11sp" />
 
         <TextView
@@ -36,7 +36,7 @@
             android:layout_marginStart="10dp"
             android:padding="2dp"
             android:text="删除"
-            android:textColor="@color/zaoba_down"
+            android:textColor="@color/chaomi_down"
             android:textSize="11sp"
             android:visibility="gone" />
     </LinearLayout>
@@ -46,6 +46,6 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:textColor="@color/zaoba_text"
+        android:textColor="@color/chaomi_text"
         android:textSize="14sp" />
 </LinearLayout>

@@ -4,15 +4,15 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/zaoba_bg">
+    android:background="@color/chaomi_bg">
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="@color/zaoba_bg"
+        android:background="@color/chaomi_bg"
         app:title="早八社区"
-        app:titleTextColor="@color/zaoba_text" />
+        app:titleTextColor="@color/chaomi_text" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -28,7 +28,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/tab_feed"
-            android:textColor="@color/zaoba_text" />
+            android:textColor="@color/chaomi_text" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/tabMarket"
@@ -38,7 +38,7 @@
             android:layout_marginStart="6dp"
             android:layout_weight="1"
             android:text="@string/tab_market"
-            android:textColor="@color/zaoba_text_dim" />
+            android:textColor="@color/chaomi_text_dim" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAccount"
@@ -49,7 +49,7 @@
             android:insetLeft="0dp"
             android:insetRight="0dp"
             android:text="登录"
-            android:textColor="@color/zaoba_accent"
+            android:textColor="@color/chaomi_accent"
             android:textSize="12sp" />
     </LinearLayout>
 
@@ -132,7 +132,7 @@
                     android:layout_width="0dp"
                     android:layout_height="42dp"
                     android:layout_weight="1"
-                    android:background="@color/zaoba_surface_2"
+                    android:background="@color/chaomi_surface_2"
                     android:hint="搜标题或内容"
                     android:imeOptions="actionSearch"
                     android:inputType="text"
@@ -140,8 +140,8 @@
                     android:paddingStart="14dp"
                     android:paddingEnd="14dp"
                     android:singleLine="true"
-                    android:textColor="@color/zaoba_text"
-                    android:textColorHint="@color/zaoba_text_dim"
+                    android:textColor="@color/chaomi_text"
+                    android:textColorHint="@color/chaomi_text_dim"
                     android:textSize="14sp" />
 
                 <com.google.android.material.button.MaterialButton
@@ -200,7 +200,7 @@
                 android:layout_marginStart="10dp"
                 android:layout_marginEnd="10dp"
                 android:layout_marginTop="2dp"
-                android:background="@color/zaoba_surface_2"
+                android:background="@color/chaomi_surface_2"
                 android:hint="搜型号 / 品牌，如 5070、9700X"
                 android:imeOptions="actionSearch"
                 android:inputType="text"
@@ -208,8 +208,8 @@
                 android:paddingStart="14dp"
                 android:paddingEnd="14dp"
                 android:singleLine="true"
-                android:textColor="@color/zaoba_text"
-                android:textColorHint="@color/zaoba_text_dim"
+                android:textColor="@color/chaomi_text"
+                android:textColorHint="@color/chaomi_text_dim"
                 android:textSize="14sp" />
 
             <HorizontalScrollView
@@ -288,7 +288,7 @@
                 android:paddingEnd="14dp"
                 android:paddingTop="2dp"
                 android:paddingBottom="4dp"
-                android:textColor="@color/zaoba_text_dim"
+                android:textColor="@color/chaomi_text_dim"
                 android:textSize="11sp" />
 
             <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -313,7 +313,7 @@
             android:layout_gravity="bottom|end"
             android:layout_margin="16dp"
             android:src="@android:drawable/ic_input_add"
-            app:backgroundTint="@color/zaoba_accent"
+            app:backgroundTint="@color/chaomi_accent"
             app:tint="#ffffff"
             android:contentDescription="发布" />
     </FrameLayout>

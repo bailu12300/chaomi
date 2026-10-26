@@ -4,17 +4,17 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/zaoba_bg">
+    android:background="@color/chaomi_bg">
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="@color/zaoba_bg"
+        android:background="@color/chaomi_bg"
         app:navigationIcon="?attr/homeAsUpIndicator"
         app:title="详情"
-        app:titleTextColor="@color/zaoba_text"
-        app:navigationIconTint="@color/zaoba_text" />
+        app:titleTextColor="@color/chaomi_text"
+        app:navigationIconTint="@color/chaomi_text" />
 
     <ScrollView
         android:layout_width="match_parent"
@@ -38,8 +38,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textSize="11sp"
-                    app:chipBackgroundColor="@color/zaoba_surface_2"
-                    android:textColor="@color/zaoba_accent" />
+                    app:chipBackgroundColor="@color/chaomi_surface_2"
+                    android:textColor="@color/chaomi_accent" />
 
                 <TextView
                     android:id="@+id/author"
@@ -47,14 +47,14 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:layout_marginStart="8dp"
-                    android:textColor="@color/zaoba_text_dim"
+                    android:textColor="@color/chaomi_text_dim"
                     android:textSize="12sp" />
 
                 <TextView
                     android:id="@+id/time"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/zaoba_text_dim"
+                    android:textColor="@color/chaomi_text_dim"
                     android:textSize="12sp" />
             </LinearLayout>
 
@@ -63,7 +63,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:textColor="@color/zaoba_text"
+                android:textColor="@color/chaomi_text"
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:visibility="gone" />
@@ -73,7 +73,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:textColor="@color/zaoba_text"
+                android:textColor="@color/chaomi_text"
                 android:textSize="15sp"
                 android:autoLink="web"
                 android:linksClickable="true" />
@@ -105,7 +105,7 @@
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/zaoba_accent" />
+                    android:textColor="@color/chaomi_accent" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/deleteBtn"
@@ -114,7 +114,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
                     android:text="删除"
-                    android:textColor="@color/zaoba_down"
+                    android:textColor="@color/chaomi_down"
                     android:visibility="gone" />
             </LinearLayout>
 
@@ -123,7 +123,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="评论"
-                android:textColor="@color/zaoba_text_dim"
+                android:textColor="@color/chaomi_text_dim"
                 android:textSize="13sp" />
 
             <androidx.recyclerview.widget.RecyclerView
@@ -140,7 +140,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:padding="10dp"
-        android:background="@color/zaoba_surface">
+        android:background="@color/chaomi_surface">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/commentInput"
@@ -148,9 +148,9 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:hint="@string/comment_hint"
-            android:textColor="@color/zaoba_text"
-            android:textColorHint="@color/zaoba_text_dim"
-            android:backgroundTint="@color/zaoba_border" />
+            android:textColor="@color/chaomi_text"
+            android:textColorHint="@color/chaomi_text_dim"
+            android:backgroundTint="@color/chaomi_border" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/sendBtn"

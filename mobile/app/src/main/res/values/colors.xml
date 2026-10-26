@@ -1,13 +1,13 @@
 <resources>
-    <color name="zaoba_bg">#0d1117</color>
-    <color name="zaoba_surface">#161b22</color>
-    <color name="zaoba_surface_2">#1c2128</color>
-    <color name="zaoba_accent">#58a6ff</color>
-    <color name="zaoba_accent_2">#1f6feb</color>
-    <color name="zaoba_gold">#e3b341</color>
-    <color name="zaoba_text">#e6edf3</color>
-    <color name="zaoba_text_dim">#8b949e</color>
-    <color name="zaoba_border">#30363d</color>
-    <color name="zaoba_up">#3fb950</color>
-    <color name="zaoba_down">#f85149</color>
+    <color name="chaomi_bg">#0d1117</color>
+    <color name="chaomi_surface">#161b22</color>
+    <color name="chaomi_surface_2">#1c2128</color>
+    <color name="chaomi_accent">#58a6ff</color>
+    <color name="chaomi_accent_2">#1f6feb</color>
+    <color name="chaomi_gold">#e3b341</color>
+    <color name="chaomi_text">#e6edf3</color>
+    <color name="chaomi_text_dim">#8b949e</color>
+    <color name="chaomi_border">#30363d</color>
+    <color name="chaomi_up">#3fb950</color>
+    <color name="chaomi_down">#f85149</color>
 </resources>

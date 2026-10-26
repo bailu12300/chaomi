@@ -1305,7 +1305,7 @@ func randStr(n int) string {
 const appDownloadPage = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>早八社区 · 安卓 App</title>
+<title>超米 · 安卓 App</title>
 <style>
   body{margin:0;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#0d1117;color:#e6edf3;display:flex;min-height:100vh;align-items:center;justify-content:center}
   .card{background:#161b22;border:1px solid #30363d;border-radius:16px;padding:32px 28px;max-width:420px;width:90%;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.4)}
@@ -1322,20 +1322,21 @@ const appDownloadPage = `<!doctype html>
   code{background:#0d1117;padding:1px 5px;border-radius:4px;color:#a5d6ff;font-size:11px}
 </style></head>
 <body><div class="card">
-  <h1>早八社区</h1>
+  <h1>超米</h1>
   <div class="sub">硬件行情 · 图文社区 · 实时互动</div>
   <a class="btn" href="/downloads/__APK__">⬇ 下载安卓 App（APK）</a>
-  <div class="meta">版本 __VER__ · 原生应用 · 支持 Android 7.0+</div>
+  <div class="meta">版本 __VER__ · 原生应用 · 支持 Android 5.0 及以上</div>
   <div class="tip">安装提示：安卓默认禁止「未知来源」安装。下载后点击 APK，按提示允许「允许来自此来源的应用」即可安装。</div>
   <details>
     <summary>装不上？点这里看排查步骤</summary>
     <ol>
-      <li><b>之前装过旧版</b>（包名 <code>com.zaoba.community</code>）：先在桌面长按图标 → 卸载，再装这个包。旧版如果换了签名，不卸载会报「应用未安装」。</li>
-      <li><b>提示「解析软件包时出现问题」</b>：多半是下载不完整。用浏览器重新下载，别用微信/QQ 内置浏览器直接装 —— 它们会把文件改名或拦截。</li>
+      <li><b>如果之前装过「早八社区」</b>：那个是旧包名（<code>com.zaoba.community</code>），和现在的「超米」（<code>com.chaomi.app</code>）是两个独立应用，<b>可以同时存在，不用卸载</b>。想清理的话手动卸载旧版即可。</li>
+      <li><b>提示「解析软件包时出现问题」</b>：多半是下载不完整或被浏览器改名。请用系统浏览器下载，别用微信/QQ 内置浏览器直接打开安装。</li>
       <li><b>华为 / 荣耀</b>：设置 → 系统和更新 → 纯净模式 → 关闭；或在「应用管控中心」里放行。</li>
       <li><b>小米 / Redmi</b>：设置 → 应用设置 → 应用管理 → 右上角 → 特殊权限 → 安装未知应用 → 允许浏览器。</li>
-      <li><b>OPPO / vivo / 一加</b>：安装时勾选「允许来自此来源」，或临时关闭「安全检查」。</li>
-      <li><b>提示「存储空间不足」或「与已安装应用冲突」</b>：清一次桌面残留图标后重启再装。</li>
+      <li><b>OPPO / vivo / 一加 / realme</b>：安装时勾选「允许来自此来源」，或临时关闭「安全检查」。</li>
+      <li><b>Android 11+ 提示「应用未安装」</b>：设置里搜索「安装未知应用」，给浏览器授权后重试。</li>
+      <li><b>仍然失败</b>：把手机型号 + 具体报错文字发给管理员，可按错误码定位。</li>
     </ol>
   </details>
 </div></body></html>`

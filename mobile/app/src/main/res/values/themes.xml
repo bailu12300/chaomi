@@ -1,26 +1,26 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.Zaoba" parent="Theme.MaterialComponents.NoActionBar">
-        <item name="colorPrimary">@color/zaoba_accent</item>
-        <item name="colorPrimaryVariant">@color/zaoba_accent_2</item>
+    <style name="Theme.Chaomi" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="colorPrimary">@color/chaomi_accent</item>
+        <item name="colorPrimaryVariant">@color/chaomi_accent_2</item>
         <item name="colorOnPrimary">#ffffff</item>
-        <item name="colorSecondary">@color/zaoba_gold</item>
+        <item name="colorSecondary">@color/chaomi_gold</item>
         <item name="colorOnSecondary">#1c2128</item>
-        <item name="android:colorBackground">@color/zaoba_bg</item>
-        <item name="colorSurface">@color/zaoba_surface</item>
-        <item name="colorOnSurface">@color/zaoba_text</item>
-        <item name="android:textColor">@color/zaoba_text</item>
-        <item name="android:textColorPrimary">@color/zaoba_text</item>
-        <item name="android:textColorSecondary">@color/zaoba_text_dim</item>
-        <item name="android:statusBarColor">@color/zaoba_bg</item>
-        <item name="android:navigationBarColor">@color/zaoba_bg</item>
+        <item name="android:colorBackground">@color/chaomi_bg</item>
+        <item name="colorSurface">@color/chaomi_surface</item>
+        <item name="colorOnSurface">@color/chaomi_text</item>
+        <item name="android:textColor">@color/chaomi_text</item>
+        <item name="android:textColorPrimary">@color/chaomi_text</item>
+        <item name="android:textColorSecondary">@color/chaomi_text_dim</item>
+        <item name="android:statusBarColor">@color/chaomi_bg</item>
+        <item name="android:navigationBarColor">@color/chaomi_bg</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
-        <item name="bottomSheetDialogTheme">@style/Theme.Zaoba.BottomSheet</item>
+        <item name="bottomSheetDialogTheme">@style/Theme.Chaomi.BottomSheet</item>
     </style>
 
-    <style name="Theme.Zaoba.BottomSheet" parent="Theme.MaterialComponents.BottomSheetDialog">
-        <item name="android:colorBackground">@color/zaoba_surface</item>
-        <item name="colorSurface">@color/zaoba_surface</item>
-        <item name="android:statusBarColor">@color/zaoba_bg</item>
+    <style name="Theme.Chaomi.BottomSheet" parent="Theme.MaterialComponents.BottomSheetDialog">
+        <item name="android:colorBackground">@color/chaomi_surface</item>
+        <item name="colorSurface">@color/chaomi_surface</item>
+        <item name="android:statusBarColor">@color/chaomi_bg</item>
     </style>
 </resources>
