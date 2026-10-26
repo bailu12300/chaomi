@@ -58,6 +58,8 @@ public class EditorSheet extends BottomSheetDialog {
     private TextView articleMeta, hint;
 
     private EditBlock pendingImageBlock;   // 正在选图的块
+    private String articleUrl = "";        // 公众号原文链接
+    private String articleCover = "";      // 原文封面
 
     public EditorSheet(AppCompatActivity act, String nick, OnPublished cb) {
         super(act);
@@ -385,40 +387,23 @@ public class EditorSheet extends BottomSheetDialog {
                 activity.runOnUiThread(() -> {
                     parseBtn.setEnabled(true);
                     parseBtn.setText(activity.getString(R.string.parse));
-                    if (a == null) {
-                        toast("解析失败");
+                    if (a == null || a.title == null || a.title.trim().isEmpty()) {
+                        toast("解析失败：没拿到标题");
                         return;
                     }
-                    if (a.title != null && !a.title.isEmpty()
-                            && titleEt.getText().toString().trim().isEmpty()) {
-                        titleEt.setText(a.title);
-                    }
-                    // 把解析出来的块并进编辑器
-                    int n = 0;
-                    if (a.blocks != null) {
-                        for (Block blk : a.blocks) {
-                            EditBlock eb = new EditBlock();
-                            if ("img".equals(blk.type)) {
-                                eb.type = "img";
-                                eb.src = blk.src;
-                            } else {
-                                eb.type = blk.type;
-                                eb.text = blk.text == null ? "" : blk.text;
-                            }
-                            blocks.add(eb);
-                            n++;
-                        }
-                    }
-                    // 清掉空的首块
-                    if (!blocks.isEmpty() && blocks.get(0).type.equals("p")
-                            && (blocks.get(0).text == null || blocks.get(0).text.isEmpty())
-                            && blocks.size() > 1) {
-                        blocks.remove(0);
-                    }
-                    articleMeta.setVisibility(View.VISIBLE);
-                    articleMeta.setText("已解析 " + n + " 段 · 可在下面继续编辑再发布");
+                    // 只填标题：正文交给浏览器渲染原文，排版才和作者一致
+                    titleEt.setText(a.title.trim());
+                    articleUrl = url;
+                    articleCover = a.cover == null ? "" : a.cover;
+
+                    // 清掉空的占位块，正文不需要本地存
+                    blocks.clear();
                     renderBlocks();
-                    toast("解析完成，共 " + n + " 段");
+
+                    articleMeta.setVisibility(View.VISIBLE);
+                    articleMeta.setText("已取到标题 · 正文将在阅读页用浏览器渲染\n"
+                            + a.title.trim());
+                    toast("标题已获取，点发布即可");
                 });
             } catch (Exception e) {
                 activity.runOnUiThread(() -> {
@@ -516,18 +501,30 @@ public class EditorSheet extends BottomSheetDialog {
                 p.type = "article";
                 p.title = title;
                 p.author = Session.nick(activity);
-                p.blocks = finalBlocks;
+
+                // 有公众号原文链接时：只存链接 + 封面，正文交给浏览器渲染
+                if (articleUrl != null && !articleUrl.isEmpty()) {
+                    p.url = articleUrl;
+                    if (articleCover != null && !articleCover.isEmpty()) {
+                        p.cover = articleCover;
+                    }
+                    // 正文只留一句提示，不存解析出来的内容（避免和原文重复）
+                    p.body = "";
+                    p.blocks = new ArrayList<>();
+                } else {
+                    p.blocks = finalBlocks;
+                }
                 if (!finalTags.isEmpty()) p.tags = finalTags;
-                // 正文摘要给列表页用
+                // 正文摘要给列表页用（仅本地块模式）
                 StringBuilder sb = new StringBuilder();
-                for (Block x : finalBlocks) {
+                for (Block x : (p.blocks == null ? finalBlocks : p.blocks)) {
                     if (x.text != null && !x.text.isEmpty()) {
                         if (sb.length() > 0) sb.append("\n");
                         sb.append(x.text);
                     }
                     if (sb.length() > 300) break;
                 }
-                p.body = sb.toString();
+                if (p.body == null || p.body.isEmpty()) p.body = sb.toString();
 
                 Post saved = Api.createPost(p);
                 activity.runOnUiThread(() -> {

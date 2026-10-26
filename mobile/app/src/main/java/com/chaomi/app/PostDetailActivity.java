@@ -35,6 +35,7 @@ public class PostDetailActivity extends AppCompatActivity {
     private TextView typeChip, author, time, title, body, likeBtn, meta;
     private LinearLayout imagesRow, blocksBox;
     private RecyclerView commentsView;
+    private View readCard, blocksBox2;
     private EditText commentInput;
     private MaterialButton sendBtn, deleteBtn;
 
@@ -56,6 +57,8 @@ public class PostDetailActivity extends AppCompatActivity {
         blocksBox = findViewById(R.id.blocksBox);
         likeBtn = findViewById(R.id.likeBtn);
         deleteBtn = findViewById(R.id.deleteBtn);
+        readCard = findViewById(R.id.readCard);
+        blocksBox2 = findViewById(R.id.blocksBox);
         commentsView = findViewById(R.id.comments);
         commentInput = findViewById(R.id.commentInput);
         sendBtn = findViewById(R.id.sendBtn);
@@ -90,30 +93,70 @@ public class PostDetailActivity extends AppCompatActivity {
                 + (post.views > 0 ? "  ·  " + post.views + " 次浏览" : ""));
         time.setText(Utils.formatTime(post.createdAt));
 
-        if (post.title != null && !post.title.isEmpty()) {
-            title.setVisibility(View.VISIBLE);
-            title.setText(post.title);
-        } else {
-            title.setVisibility(View.GONE);
-        }
+        // 文章类：正文交给浏览器渲染，隐藏解析出来的原生标题（原文里已有标题）
+        boolean readerMode = "article".equals(post.type)
+                && post.url != null && !post.url.isEmpty();
 
-        // 文章类优先用原生块渲染；没有块再退回纯文本
-        boolean hasBlocks = post.blocks != null && !post.blocks.isEmpty();
-        if (hasBlocks) {
-            blocksBox.setVisibility(View.VISIBLE);
+        if (readerMode) {
+            // 隐藏原生标题与正文，避免和原文标题重复
+            title.setVisibility(View.GONE);
             body.setVisibility(View.GONE);
-            ArticleRenderer.render(this, blocksBox, post.blocks);
-        } else {
             blocksBox.setVisibility(View.GONE);
-            body.setVisibility(View.VISIBLE);
-            body.setText(post.body == null ? "" : post.body);
+
+            readCard.setVisibility(View.VISIBLE);
+            TextView hint = findViewById(R.id.readHint);
+            TextView src = findViewById(R.id.readSource);
+            if (hint != null) {
+                String t = post.title == null ? "" : post.title.trim();
+                hint.setText(t.isEmpty()
+                        ? "正文在浏览器中打开，保留原文排版、图片与视频"
+                        : t);
+            }
+            if (src != null) {
+                String host = "";
+                try {
+                    host = new java.net.URL(post.url).getHost();
+                } catch (Exception ignored) {
+                    host = post.url;
+                }
+                src.setText("来源 " + host + " · 点击进入沉浸阅读");
+            }
+            final String u = post.url;
+            final String t = post.title;
+            readCard.setOnClickListener(v -> {
+                android.content.Intent i = new android.content.Intent(this, ReaderActivity.class);
+                i.putExtra(ReaderActivity.EXTRA_URL, u);
+                i.putExtra(ReaderActivity.EXTRA_TITLE, t);
+                startActivity(i);
+            });
+        } else {
+            readCard.setVisibility(View.GONE);
+
+            if (post.title != null && !post.title.isEmpty()) {
+                title.setVisibility(View.VISIBLE);
+                title.setText(post.title);
+            } else {
+                title.setVisibility(View.GONE);
+            }
+
+            // 没有原文链接时才退回原生块渲染
+            boolean hasBlocks = post.blocks != null && !post.blocks.isEmpty();
+            if (hasBlocks) {
+                blocksBox.setVisibility(View.VISIBLE);
+                body.setVisibility(View.GONE);
+                ArticleRenderer.render(this, blocksBox, post.blocks);
+            } else {
+                blocksBox.setVisibility(View.GONE);
+                body.setVisibility(View.VISIBLE);
+                body.setText(post.body == null ? "" : post.body);
+            }
         }
 
         // 有 blocks 时图片已在正文里，避免重复展示
         imagesRow.removeAllViews();
-        imagesRow.setVisibility(hasBlocks || post.images == null || post.images.isEmpty()
+        imagesRow.setVisibility(readerMode || post.images == null || post.images.isEmpty()
                 ? View.GONE : View.VISIBLE);
-        if (!hasBlocks && post.images != null) {
+        if (!readerMode && post.images != null) {
             int h = (int) (200 * getResources().getDisplayMetrics().density);
             for (String u : post.images) {
                 ImageView iv = new ImageView(this);

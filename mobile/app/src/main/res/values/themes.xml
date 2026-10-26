@@ -23,4 +23,9 @@
         <item name="colorSurface">@color/chaomi_surface</item>
         <item name="android:statusBarColor">@color/chaomi_bg</item>
     </style>
+
+    <!-- 阅读页：无状态栏遮挡的沉浸式 -->
+    <style name="Theme.Chaomi.Reader" parent="Theme.Chaomi">
+        <item name="android:windowAnimationStyle">@android:style/Animation.Activity</item>
+    </style>
 </resources>

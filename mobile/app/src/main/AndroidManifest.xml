@@ -53,6 +53,12 @@
             android:parentActivityName=".MainActivity" />
 
         <activity
+            android:name=".ReaderActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden|locale|uiMode"
+            android:theme="@style/Theme.Chaomi.Reader" />
+
+        <activity
             android:name=".ProfileActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />
