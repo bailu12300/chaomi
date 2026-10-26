@@ -15,4 +15,6 @@
     <string name="like">赞</string>
     <string name="loading">加载中…</string>
     <string name="empty_feed">还没有内容，点右下角 + 发第一条吧</string>
+    <string name="ad_skip_label">超米 · 自动跳过广告</string>
+    <string name="ad_skip_desc">识别开屏和弹窗上的「跳过 / 关闭」按钮并自动点击。只读取界面上的按钮文字，不上传任何屏幕内容。</string>
 </resources>

@@ -24,8 +24,7 @@ JDK = "D:/cm-pricesite/tools/jdk17/jdk-17.0.20.1+1"
 KS = os.environ.get("CHAOMI_KS", "")
 KS_PASS = os.environ.get("CHAOMI_KS_PASS", "")
 KEY_ALIAS = os.environ.get("CHAOMI_KS_ALIAS", "chaomi")
-if not KS or not KS_PASS:
-    raise SystemExit("请设置 CHAOMI_KS（keystore 路径）和 CHAOMI_KS_PASS（密钥口令），不要把凭据写进代码")
+if not KS or not KS_PASS://n    raise SystemExit("请设置 CHAOMI_KS（keystore 路径）和 CHAOMI_KS_PASS（口令），不要把凭据写进代码")
 EXPECT_CN = "CN=Chaomi"
 OUTDIR = "D:/zaoba-community/android/app/build/outputs/apk/release"
 PREFIX = "chaomi"

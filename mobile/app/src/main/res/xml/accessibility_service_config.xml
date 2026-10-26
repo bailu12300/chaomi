@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  无障碍服务配置。
+  - canRetrieveWindowContent: 读取当前界面节点树（识别"跳过"按钮的前提）
+  - flagRetrieveInteractiveWindows: 能拿到多个窗口，开屏广告常在独立窗口里
+  - flagIncludeNotImportantViews: 部分 App 把"跳过"标成 not important，不加会漏
+  - notificationTimeout 80ms：太大会错过 3 秒就消失的开屏广告
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewClicked"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews|flagReportViewIds"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/ad_skip_desc"
+    android:notificationTimeout="80"
+    android:settingsActivity="com.chaomi.app.MainActivity" />

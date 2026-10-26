@@ -68,6 +68,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        Ui.fit(this);
         Session.restore(this);
 
         feedView = findViewById(R.id.feed);
@@ -109,6 +110,8 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         tabMarket.setOnClickListener(v -> { showMarket(); if (!marketLoaded) loadMarket(); });
         fab.setOnClickListener(v -> openComposer());
         btnAccount.setOnClickListener(v -> onAccountClick());
+        findViewById(R.id.btnAdSkip).setOnClickListener(v ->
+                startActivity(new Intent(this, AdSkipActivity.class)));
 
         fLatest.setOnClickListener(v -> { feedSort = ""; feedMine = false; loadFeed(); });
         fHot.setOnClickListener(v -> { feedSort = "hot"; feedMine = false; loadFeed(); });
@@ -147,6 +150,8 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         paintAccount();
         loadFeed();
         loadTags();
+
+        startKeepAlive();
 
         realtime = new Realtime(this);
         Api.bg(() -> {
@@ -536,4 +541,27 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
     @Override
     public void onStatus(String s) {
     }
+
+    /** 启动常驻守护 + 申请通知权限（前台服务需要通知才不会被折起来） */
+    private void startKeepAlive() {
+        if (Session.loggedIn(this) || true) {
+            KeepAliveService.start(this);
+            KeepAliveReceiver.schedule(this);
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            try {
+                if (checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                        != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(
+                            new String[]{"android.permission.POST_NOTIFICATIONS"}, 9101);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        // 首次进入引导授权（只提示一次）
+        if (!AdSkipPrefs.enabled(this) || !KeepAliveService.isAccessibilityOn(this)) {
+            AdSkipPrefs.sp(this).edit().putBoolean("asked", true).apply();
+        }
+    }
+
 }
