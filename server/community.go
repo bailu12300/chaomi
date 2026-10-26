@@ -1011,14 +1011,17 @@ func handleCommunityPost(db *sql.DB, w http.ResponseWriter, r *http.Request, id 
 			"mine": uid > 0 && p.UserID == uid,
 		})
 	case r.Method == http.MethodPost && strings.HasSuffix(path, "/comments"):
+		// 游客不能评论：必须登录
+		if u == nil {
+			writeJSON(w, 401, map[string]string{"error": "登录后才能评论"})
+			return
+		}
 		var c CComment
 		if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
 			writeJSON(w, 400, map[string]string{"error": "请求体解析失败"})
 			return
 		}
-		if u != nil {
-			c.UserID = u.ID
-		}
+		c.UserID = u.ID
 		c.Author = cAuthorName(u, c.Author)
 		c.Body = strings.TrimSpace(c.Body)
 		if c.Body == "" {
@@ -1038,6 +1041,11 @@ func handleCommunityPost(db *sql.DB, w http.ResponseWriter, r *http.Request, id 
 		hub.broadcastJSON(map[string]interface{}{"type": "new_comment", "postId": id, "comment": saved})
 		writeJSON(w, 201, map[string]interface{}{"code": 0, "data": saved})
 	case r.Method == http.MethodPost && strings.HasSuffix(path, "/like"):
+		// 游客不能点赞：必须登录
+		if u == nil {
+			writeJSON(w, 401, map[string]string{"error": "登录后才能点赞"})
+			return
+		}
 		n, liked, err := cToggleLike(db, id, uid)
 		if err != nil {
 			writeJSON(w, 500, map[string]string{"error": err.Error()})

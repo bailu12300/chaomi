@@ -1,5 +1,7 @@
 package com.chaomi.app;
 
+import androidx.core.content.ContextCompat;
+
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -79,7 +81,7 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.VH> {
         }
 
         h.likeBtn.setText((p.liked ? "♥ " : "♡ ") + p.likes);
-        h.likeBtn.setTextColor(p.liked ? 0xFFf85149 : 0xFF8b949e);
+        h.likeBtn.setTextColor(p.liked ? ContextCompat.getColor(h.itemView.getContext(), R.color.chaomi_up) : ContextCompat.getColor(h.itemView.getContext(), R.color.chaomi_text_dim));
         h.commentBtn.setText("💬 " + p.commentCount);
 
         // 标签
@@ -91,7 +93,7 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.VH> {
                 TextView t = new TextView(h.itemView.getContext());
                 t.setText("#" + p.tags.get(i));
                 t.setTextSize(11);
-                t.setTextColor(0xFF58a6ff);
+                t.setTextColor(ContextCompat.getColor(h.itemView.getContext(), R.color.chaomi_accent));
                 t.setPadding(0, 0, 14, 0);
                 h.tagsRow.addView(t);
             }

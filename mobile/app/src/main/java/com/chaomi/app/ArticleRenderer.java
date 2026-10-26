@@ -1,6 +1,7 @@
 package com.chaomi.app;
 
 import android.content.Context;
+import androidx.core.content.ContextCompat;
 import android.graphics.Typeface;
 import android.text.TextUtils;
 import android.util.TypedValue;
@@ -20,21 +21,13 @@ import java.util.List;
  */
 class ArticleRenderer {
 
-    static final int COL_TEXT = 0xFFe6edf3;
-    static final int COL_DIM = 0xFF8b949e;
-    static final int COL_ACCENT = 0xFF58a6ff;
-    static final int COL_BORDER = 0xFF30363d;
-    static final int COL_SURFACE = 0xFF161b22;
-    static final int COL_CODE_BG = 0xFF0d1117;
-    static final int COL_QUOTE_BG = 0xFF1c2128;
-
     /** 把 blocks 渲染进容器（会先清空） */
     static void render(Context ctx, LinearLayout box, List<Block> blocks) {
         box.removeAllViews();
         if (blocks == null || blocks.isEmpty()) {
             TextView tv = new TextView(ctx);
             tv.setText("（正文为空）");
-            tv.setTextColor(COL_DIM);
+            tv.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_text_dim));
             tv.setTextSize(14);
             box.addView(tv, lp(0, dp(ctx, 4)));
             return;
@@ -62,6 +55,10 @@ class ArticleRenderer {
                 return image(ctx, b.src, b.alt);
             case "topic":
                 return topic(ctx, b.text);
+            case "video":
+                return video(ctx, b);
+            case "hr":
+                return divider(ctx);
             case "link":
                 return linkCard(ctx, b);
             case "p":
@@ -87,7 +84,7 @@ class ArticleRenderer {
         TextView tv = new TextView(ctx);
         tv.setText(text == null ? "" : text);
         tv.setTextSize(sp);
-        tv.setTextColor(COL_TEXT);
+        tv.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_text));
         if (bold) tv.setTypeface(Typeface.DEFAULT_BOLD);
         tv.setLineSpacing(dp(ctx, 4), 1f);
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
@@ -102,7 +99,7 @@ class ArticleRenderer {
         TextView tv = new TextView(ctx);
         tv.setText(text);
         tv.setTextSize(15.5f);
-        tv.setTextColor(COL_TEXT);
+        tv.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_text));
         tv.setLineSpacing(dp(ctx, 8), 1f);
         tv.setTextIsSelectable(true);
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
@@ -119,7 +116,7 @@ class ArticleRenderer {
 
         TextView dot = new TextView(ctx);
         dot.setText("•");
-        dot.setTextColor(COL_ACCENT);
+        dot.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_accent));
         dot.setTextSize(15);
         dot.setPadding(0, 0, dp(ctx, 8), 0);
         row.addView(dot);
@@ -127,7 +124,7 @@ class ArticleRenderer {
         TextView tv = new TextView(ctx);
         tv.setText(text == null ? "" : text);
         tv.setTextSize(15);
-        tv.setTextColor(COL_TEXT);
+        tv.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_text));
         tv.setLineSpacing(dp(ctx, 6), 1f);
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -144,17 +141,17 @@ class ArticleRenderer {
         View bar = new View(ctx);
         LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(dp(ctx, 3),
                 ViewGroup.LayoutParams.MATCH_PARENT);
-        bar.setBackgroundColor(COL_ACCENT);
+        bar.setBackgroundColor(ContextCompat.getColor(ctx, R.color.chaomi_accent));
         bar.setLayoutParams(bp);
         wrap.addView(bar);
 
         TextView tv = new TextView(ctx);
         tv.setText(text == null ? "" : text);
         tv.setTextSize(14.5f);
-        tv.setTextColor(0xFFc9d1d9);
+        tv.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_text));
         tv.setLineSpacing(dp(ctx, 6), 1f);
         tv.setPadding(dp(ctx, 12), dp(ctx, 8), dp(ctx, 10), dp(ctx, 8));
-        tv.setBackgroundColor(COL_QUOTE_BG);
+        tv.setBackgroundColor(ContextCompat.getColor(ctx, R.color.chaomi_quote_bg));
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         tv.setLayoutParams(p);
@@ -166,11 +163,11 @@ class ArticleRenderer {
         TextView tv = new TextView(ctx);
         tv.setText(text == null ? "" : text);
         tv.setTextSize(13);
-        tv.setTextColor(0xFFa5d6ff);
+        tv.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_syntax_str));
         tv.setTypeface(Typeface.MONOSPACE);
         tv.setLineSpacing(dp(ctx, 4), 1f);
         tv.setPadding(dp(ctx, 12), dp(ctx, 10), dp(ctx, 12), dp(ctx, 10));
-        tv.setBackgroundColor(COL_CODE_BG);
+        tv.setBackgroundColor(ContextCompat.getColor(ctx, R.color.chaomi_code_bg));
         tv.setTextIsSelectable(true);
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -234,7 +231,7 @@ class ArticleRenderer {
         TextView tv = new TextView(ctx);
         tv.setText("#" + (text == null ? "" : text.trim()));
         tv.setTextSize(12);
-        tv.setTextColor(COL_ACCENT);
+        tv.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_accent));
         tv.setPadding(dp(ctx, 8), dp(ctx, 4), dp(ctx, 8), dp(ctx, 4));
         android.graphics.drawable.GradientDrawable g =
                 new android.graphics.drawable.GradientDrawable();
@@ -255,7 +252,7 @@ class ArticleRenderer {
 
         LinearLayout card = new LinearLayout(ctx);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackgroundColor(COL_SURFACE);
+        card.setBackgroundColor(ContextCompat.getColor(ctx, R.color.chaomi_surface));
         card.setPadding(dp(ctx, 12), dp(ctx, 10), dp(ctx, 12), dp(ctx, 10));
         LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -288,14 +285,14 @@ class ArticleRenderer {
         }
         site.setText(host);
         site.setTextSize(10);
-        site.setTextColor(COL_DIM);
+        site.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_text_dim));
         card.addView(site);
 
         // 标题
         TextView title = new TextView(ctx);
         title.setText(b.text == null ? "" : b.text);
         title.setTextSize(14.5f);
-        title.setTextColor(COL_TEXT);
+        title.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_text));
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setMaxLines(3);
         title.setEllipsize(TextUtils.TruncateAt.END);
@@ -310,7 +307,7 @@ class ArticleRenderer {
             TextView desc = new TextView(ctx);
             desc.setText(b.alt);
             desc.setTextSize(12.5f);
-            desc.setTextColor(COL_DIM);
+            desc.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_text_dim));
             desc.setMaxLines(3);
             desc.setEllipsize(TextUtils.TruncateAt.END);
             LinearLayout.LayoutParams dp2 = new LinearLayout.LayoutParams(
@@ -334,5 +331,88 @@ class ArticleRenderer {
         });
         return card;
     }
+
+
+    /** 视频块：封面 + 播放按钮，点击用系统播放器/浏览器打开 */
+    private static View video(Context ctx, Block b) {
+        if (TextUtils.isEmpty(b.src) && TextUtils.isEmpty(b.alt)) return null;
+
+        android.widget.FrameLayout box = new android.widget.FrameLayout(ctx);
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, 200));
+        bp.topMargin = dp(ctx, 12);
+        box.setLayoutParams(bp);
+        box.setBackgroundColor(ContextCompat.getColor(ctx, R.color.chaomi_surface_2));
+
+        // 封面
+        if (!TextUtils.isEmpty(b.alt)) {
+            ImageView cover = new ImageView(ctx);
+            cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            cover.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            Picasso.get().load(Utils.fullUrl(b.alt)).into(cover);
+            box.addView(cover);
+        }
+
+        // 播放按钮
+        TextView play = new TextView(ctx);
+        play.setText("▶");
+        play.setTextSize(30);
+        play.setTextColor(0xFFFFFFFF);
+        play.setGravity(android.view.Gravity.CENTER);
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+        g.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        g.setColor(0x99000000);
+        play.setBackground(g);
+        int sz = dp(ctx, 60);
+        android.widget.FrameLayout.LayoutParams pp =
+                new android.widget.FrameLayout.LayoutParams(sz, sz, android.view.Gravity.CENTER);
+        play.setLayoutParams(pp);
+        box.addView(play);
+
+        // 角标：来源类型
+        if (!TextUtils.isEmpty(b.text)) {
+            TextView tag = new TextView(ctx);
+            tag.setText("视频");
+            tag.setTextSize(10);
+            tag.setTextColor(0xFFFFFFFF);
+            tag.setBackgroundColor(0xCC000000);
+            tag.setPadding(dp(ctx, 6), dp(ctx, 2), dp(ctx, 6), dp(ctx, 2));
+            android.widget.FrameLayout.LayoutParams tp =
+                    new android.widget.FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                            android.view.Gravity.START | android.view.Gravity.TOP);
+            tp.setMargins(dp(ctx, 8), dp(ctx, 8), 0, 0);
+            tag.setLayoutParams(tp);
+            box.addView(tag);
+        }
+
+        final String url = b.src;
+        box.setOnClickListener(v -> {
+            if (TextUtils.isEmpty(url)) return;
+            try {
+                android.content.Intent i = new android.content.Intent(
+                        android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url));
+                i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(i);
+            } catch (Exception ignored) {
+            }
+        });
+        return box;
+    }
+
+    /** 分割线 */
+    private static View divider(Context ctx) {
+        View line = new View(ctx);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, 1));
+        p.topMargin = dp(ctx, 16);
+        p.bottomMargin = dp(ctx, 6);
+        line.setLayoutParams(p);
+        line.setBackgroundColor(ContextCompat.getColor(ctx, R.color.chaomi_border));
+        return line;
+    }
+
 
 }

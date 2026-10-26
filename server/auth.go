@@ -41,10 +41,10 @@ type CUser struct {
 
 // CBlock 文章原生块：客户端据此渲染，不依赖 WebView
 type CBlock struct {
-	Type string `json:"type"`           // p | h2 | h3 | img | quote | code | li
-	Text string `json:"text,omitempty"` // 文本内容
-	Src  string `json:"src,omitempty"`  // img 用
-	Alt  string `json:"alt,omitempty"`  // img 用
+	Type string `json:"type"`           // p | h2 | h3 | img | quote | code | li | video | hr
+	Text string `json:"text,omitempty"` // 文本内容（video 时存类型标记）
+	Src  string `json:"src,omitempty"`  // img / video 地址
+	Alt  string `json:"alt,omitempty"`  // img 描述 / video 封面
 }
 
 // ===== 建表（幂等，可反复执行） =====
@@ -558,7 +558,7 @@ func cParseArticleNative(rawURL string) (*CArticle, []CBlock, error) {
 	if content.Length() == 0 {
 		content = doc.Find("body")
 	}
-	blocks := cHTMLToBlocks(content)
+	blocks := cHTMLToBlocksV2(content)
 	// 图片地址补全为绝对路径
 	for i := range blocks {
 		if blocks[i].Type == "img" {

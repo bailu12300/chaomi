@@ -1,5 +1,7 @@
 package com.chaomi.app;
 
+import androidx.core.content.ContextCompat;
+
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
@@ -136,11 +138,16 @@ public class PostDetailActivity extends AppCompatActivity {
     private void paintLike() {
         if (post == null) return;
         likeBtn.setText((post.liked ? "♥ " : "♡ ") + post.likes + "  赞");
-        likeBtn.setTextColor(post.liked ? 0xFFf85149 : 0xFF58a6ff);
+        likeBtn.setTextColor(post.liked ? ContextCompat.getColor(this, R.color.chaomi_up) : ContextCompat.getColor(this, R.color.chaomi_accent));
     }
 
     private void doLike() {
         if (post == null) return;
+        if (!Session.loggedIn(this)) {
+            Toast.makeText(this, "登录后才能点赞", Toast.LENGTH_SHORT).show();
+            startActivity(new Intent(this, AuthActivity.class));
+            return;
+        }
         Api.bg(() -> {
             try {
                 Api.LikeResult r = Api.like(post.id);

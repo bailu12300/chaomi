@@ -3113,6 +3113,9 @@ func doServe() error {
 	})
 	mux.HandleFunc("/api/article/parse", func(w http.ResponseWriter, r *http.Request) { handleArticleParse(w, r) })
 
+	// ---- 解析自测（仅 /tmp 只读）----
+	mux.HandleFunc("/api/article/debug", handleArticleDebug)
+
 	// ---- 链接卡片 ----
 	mux.HandleFunc("/api/link/preview", handleLinkPreview)
 

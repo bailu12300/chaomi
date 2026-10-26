@@ -1,0 +1,27 @@
+<resources>
+    <!-- ===== 深色主题（values/colors.xml 的 night 覆盖）===== -->
+    <color name="chaomi_bg">#0d1117</color>
+    <color name="chaomi_surface">#161b22</color>
+    <color name="chaomi_surface_2">#1c2128</color>
+    <color name="chaomi_accent">#58a6ff</color>
+    <color name="chaomi_accent_2">#1f6feb</color>
+    <color name="chaomi_gold">#e3b341</color>
+    <color name="chaomi_text">#e6edf3</color>
+    <color name="chaomi_text_dim">#8b949e</color>
+    <color name="chaomi_border">#30363d</color>
+
+    <!-- 涨跌：涨=红 跌=绿 -->
+    <color name="chaomi_up">#f85149</color>
+    <color name="chaomi_down">#3fb950</color>
+    <color name="chaomi_flat">#8b949e</color>
+
+    <color name="chaomi_danger">#f85149</color>
+    <color name="chaomi_ok">#3fb950</color>
+    <color name="chaomi_warn">#e3b341</color>
+    <color name="chaomi_code_bg">#0d1117</color>
+    <color name="chaomi_quote_bg">#1c2128</color>
+    <color name="chaomi_scrim">#99000000</color>
+    <color name="chaomi_syntax_str">#a5d6ff</color>
+    <color name="chaomi_syntax_num">#79c0ff</color>
+    <color name="chaomi_syntax_kw">#ff7b72</color>
+</resources>

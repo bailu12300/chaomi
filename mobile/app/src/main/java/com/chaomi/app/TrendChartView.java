@@ -1,6 +1,7 @@
 package com.chaomi.app;
 
 import android.content.Context;
+import androidx.core.content.ContextCompat;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
@@ -31,9 +32,9 @@ public class TrendChartView extends View {
     private final Path linePath = new Path();
     private final Path fillPath = new Path();
 
-    private static final int COL_UP = 0xFFf85149;    // 涨=红
-    private static final int COL_DOWN = 0xFF3fb950;  // 跌=绿
-    private static final int COL_FLAT = 0xFF58a6ff;
+    // 颜色在构造里按当前主题取，切主题后重建即生效
+    private int COL_TEXT, COL_DIM, COL_ACCENT, COL_BORDER, COL_UP, COL_DOWN, COL_FLAT;
+
 
     public TrendChartView(Context c) { this(c, null); }
 
@@ -46,10 +47,18 @@ public class TrendChartView extends View {
         fillPaint.setStyle(Paint.Style.FILL);
         dotPaint.setStyle(Paint.Style.FILL);
         textPaint.setTextSize(dp(10f));
-        textPaint.setColor(0xFF8b949e);
+        textPaint.setColor(ContextCompat.getColor(getContext(), R.color.chaomi_text_dim));
         gridPaint.setStyle(Paint.Style.STROKE);
         gridPaint.setStrokeWidth(dp(0.7f));
-        gridPaint.setColor(0xFF30363d);
+        gridPaint.setColor(ContextCompat.getColor(getContext(), R.color.chaomi_border));
+
+        COL_TEXT = ContextCompat.getColor(getContext(), R.color.chaomi_text);
+        COL_DIM = ContextCompat.getColor(getContext(), R.color.chaomi_text_dim);
+        COL_ACCENT = ContextCompat.getColor(getContext(), R.color.chaomi_accent);
+        COL_BORDER = ContextCompat.getColor(getContext(), R.color.chaomi_border);
+        COL_UP = ContextCompat.getColor(getContext(), R.color.chaomi_up);
+        COL_DOWN = ContextCompat.getColor(getContext(), R.color.chaomi_down);
+        COL_FLAT = ContextCompat.getColor(getContext(), R.color.chaomi_flat);
     }
 
     private float dp(float v) {
@@ -75,7 +84,7 @@ public class TrendChartView extends View {
         if (pts.isEmpty()) {
             textPaint.setTextAlign(Paint.Align.CENTER);
             textPaint.setTextSize(dp(13f));
-            textPaint.setColor(0xFF8b949e);
+            textPaint.setColor(ContextCompat.getColor(getContext(), R.color.chaomi_text_dim));
             cv.drawText("暂无历史价格，采集积累后自动生成走势", w / 2f, h / 2f, textPaint);
             textPaint.setTextSize(dp(10f));
             return;
@@ -101,7 +110,7 @@ public class TrendChartView extends View {
         // 横向网格 + 纵轴价格刻度
         textPaint.setTextAlign(Paint.Align.RIGHT);
         textPaint.setTextSize(dp(10f));
-        textPaint.setColor(0xFF8b949e);
+        textPaint.setColor(ContextCompat.getColor(getContext(), R.color.chaomi_text_dim));
         int rows = 3;
         for (int i = 0; i <= rows; i++) {
             float y = padT + plotH * i / rows;
@@ -149,7 +158,7 @@ public class TrendChartView extends View {
 
         // 首末时间标注
         textPaint.setTextAlign(Paint.Align.LEFT);
-        textPaint.setColor(0xFF8b949e);
+        textPaint.setColor(ContextCompat.getColor(getContext(), R.color.chaomi_text_dim));
         SimpleDateFormat sdf = new SimpleDateFormat("MM-dd", Locale.CHINA);
         cv.drawText(sdf.format(new Date(pts.get(0).ts * 1000)), padL, h - dp(6), textPaint);
         if (n > 1) {

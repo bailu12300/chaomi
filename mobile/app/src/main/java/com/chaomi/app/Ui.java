@@ -37,12 +37,13 @@ class Ui {
             w.setNavigationBarColor(0x00000000);
         }
 
-        // 状态栏/导航栏图标：深色主题要用亮色图标
+        // 状态栏/导航栏图标：浅色主题用深色图标，深色主题用亮色图标
+        boolean dark = ThemeManager.isDark(a);
         WindowInsetsControllerCompat c =
                 WindowCompat.getInsetsController(w, a.getWindow().getDecorView());
         if (c != null) {
-            c.setAppearanceLightStatusBars(false);
-            c.setAppearanceLightNavigationBars(false);
+            c.setAppearanceLightStatusBars(!dark);
+            c.setAppearanceLightNavigationBars(!dark);
         }
 
         // Android 9 起允许内容画进刘海区，再靠 padding 让开

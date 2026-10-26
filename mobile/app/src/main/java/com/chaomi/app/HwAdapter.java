@@ -1,5 +1,7 @@
 package com.chaomi.app;
 
+import androidx.core.content.ContextCompat;
+
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -43,10 +45,10 @@ public class HwAdapter extends RecyclerView.Adapter<HwAdapter.VH> {
 
         if (m.noMatch || "nomatch".equals(m.priceStatus)) {
             h.price.setText("暂无准确报价");
-            h.price.setTextColor(0xFF8b949e);
+            h.price.setTextColor(ContextCompat.getColor(h.itemView.getContext(), R.color.chaomi_text_dim));
         } else {
             h.price.setText(Utils.priceStr(m.price));
-            h.price.setTextColor(0xFFe6edf3);
+            h.price.setTextColor(ContextCompat.getColor(h.itemView.getContext(), R.color.chaomi_text));
         }
 
         // 涨跌徽标：涨=红、跌=绿（国内习惯）。同时显示实际差价与百分比
@@ -59,16 +61,16 @@ public class HwAdapter extends RecyclerView.Adapter<HwAdapter.VH> {
         }
         if ("up".equals(m.trend)) {
             h.trend.setText(pct.isEmpty() ? "↑ 涨" : "↑ " + pct);
-            h.trend.setTextColor(0xFFf85149);
+            h.trend.setTextColor(ContextCompat.getColor(h.itemView.getContext(), R.color.chaomi_up));
         } else if ("down".equals(m.trend)) {
             h.trend.setText(pct.isEmpty() ? "↓ 跌" : "↓ " + pct);
-            h.trend.setTextColor(0xFF3fb950);
+            h.trend.setTextColor(ContextCompat.getColor(h.itemView.getContext(), R.color.chaomi_down));
         } else if (m.hasChange) {
             h.trend.setText(pct);
-            h.trend.setTextColor(0xFF8b949e);
+            h.trend.setTextColor(ContextCompat.getColor(h.itemView.getContext(), R.color.chaomi_text_dim));
         } else {
             h.trend.setText("— 平");
-            h.trend.setTextColor(0xFF8b949e);
+            h.trend.setTextColor(ContextCompat.getColor(h.itemView.getContext(), R.color.chaomi_text_dim));
         }
 
         h.itemView.setOnClickListener(v -> { if (click != null) click.onClick(m); });

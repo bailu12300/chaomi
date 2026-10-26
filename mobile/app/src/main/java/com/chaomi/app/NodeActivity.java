@@ -1,5 +1,7 @@
 package com.chaomi.app;
 
+import androidx.core.content.ContextCompat;
+
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.View;
@@ -58,7 +60,7 @@ public class NodeActivity extends AppCompatActivity implements NodeMonitor.Liste
             } else {
                 monitor.stop();
                 nodeName.setText("已暂停探测");
-                setDot(0xFF8b949e);
+                setDot(ContextCompat.getColor(this, R.color.chaomi_text_dim));
             }
         });
 
@@ -95,16 +97,16 @@ public class NodeActivity extends AppCompatActivity implements NodeMonitor.Liste
         tickCount++;
         if (ok) {
             rtt.setText(String.valueOf(ms));
-            rtt.setTextColor(LatencyChartView.qualityColor(ms));
+            rtt.setTextColor(LatencyChartView.qualityColor(this, ms));
             quality.setText(grade(ms));
-            quality.setTextColor(LatencyChartView.qualityColor(ms));
-            setDot(LatencyChartView.qualityColor(ms));
+            quality.setTextColor(LatencyChartView.qualityColor(this, ms));
+            setDot(LatencyChartView.qualityColor(this, ms));
         } else {
             rtt.setText("超时");
-            rtt.setTextColor(0xFFf85149);
+            rtt.setTextColor(ContextCompat.getColor(this, R.color.chaomi_up));
             quality.setText("无响应");
-            quality.setTextColor(0xFFf85149);
-            setDot(0xFFf85149);
+            quality.setTextColor(ContextCompat.getColor(this, R.color.chaomi_up));
+            setDot(ContextCompat.getColor(this, R.color.chaomi_up));
         }
 
         int sent = monitor.sent();
@@ -119,7 +121,7 @@ public class NodeActivity extends AppCompatActivity implements NodeMonitor.Liste
         sJitter.setText(monitor.jitter() > 0 ? monitor.jitter() + " ms" : "--");
         double loss = monitor.lossRate();
         sLoss.setText(String.format(java.util.Locale.CHINA, "%.1f%%", loss));
-        sLoss.setTextColor(loss > 5 ? 0xFFf85149 : 0xFFe6edf3);
+        sLoss.setTextColor(loss > 5 ? ContextCompat.getColor(this, R.color.chaomi_up) : ContextCompat.getColor(this, R.color.chaomi_text));
 
         // 每 20 次刷新一次节点信息
         if (tickCount % 20 == 0) loadNodeInfo();

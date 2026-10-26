@@ -1,5 +1,7 @@
 package com.chaomi.app;
 
+import androidx.core.content.ContextCompat;
+
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
@@ -113,6 +115,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         btnAccount.setOnClickListener(v -> onAccountClick());
         findViewById(R.id.btnAdSkip).setOnClickListener(v ->
                 startActivity(new Intent(this, AdSkipActivity.class)));
+        findViewById(R.id.btnTheme).setOnClickListener(v -> showThemePicker());
         findViewById(R.id.btnNode).setOnClickListener(v ->
                 startActivity(new Intent(this, NodeActivity.class)));
         findViewById(R.id.btnCrawl).setOnClickListener(v -> onCrawlClick());
@@ -175,6 +178,27 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         startActivity(new Intent(this, ProfileActivity.class));
     }
 
+    /** 主题切换：浅色 / 深色 / 跟随系统 */
+    private void showThemePicker() {
+        final String[] labels = {"浅色", "深色", "跟随系统"};
+        final String[] modes = {ThemeManager.LIGHT, ThemeManager.DARK, ThemeManager.AUTO};
+        int cur = 0;
+        String now = ThemeManager.mode(this);
+        for (int i = 0; i < modes.length; i++) {
+            if (modes[i].equals(now)) cur = i;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("主题（当前：" + labels[cur] + "）")
+                .setSingleChoiceItems(labels, cur, (d, which) -> {
+                    d.dismiss();
+                    if (modes[which].equals(ThemeManager.mode(this))) return;
+                    ThemeManager.setMode(this, modes[which]);
+                    recreate();
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
     private void promptLogin() {
         new AlertDialog.Builder(this)
                 .setTitle("需要登录")
@@ -189,10 +213,10 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         if (Session.loggedIn(this)) {
             String n = Session.nick(this);
             btnAccount.setText(n.length() > 6 ? n.substring(0, 6) : n);
-            btnAccount.setTextColor(0xFFe3b341);
+            btnAccount.setTextColor(ContextCompat.getColor(this, R.color.chaomi_gold));
         } else {
             btnAccount.setText("登录");
-            btnAccount.setTextColor(0xFF58a6ff);
+            btnAccount.setTextColor(ContextCompat.getColor(this, R.color.chaomi_accent));
         }
     }
 
@@ -226,8 +250,8 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         marketPane.setVisibility(View.GONE);
         fab.setVisibility(View.VISIBLE);
         tabFeed.setTextColor(0xFFFFFFFF);
-        tabFeed.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF58a6ff));
-        tabMarket.setTextColor(0xFF8b949e);
+        tabFeed.setBackgroundTintList(android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, R.color.chaomi_accent)));
+        tabMarket.setTextColor(ContextCompat.getColor(this, R.color.chaomi_text_dim));
         tabMarket.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0x00000000));
         paintFeedSort();
     }
@@ -237,18 +261,18 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         feedPane.setVisibility(View.GONE);
         fab.setVisibility(View.GONE);
         tabMarket.setTextColor(0xFFFFFFFF);
-        tabMarket.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF58a6ff));
-        tabFeed.setTextColor(0xFF8b949e);
+        tabMarket.setBackgroundTintList(android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, R.color.chaomi_accent)));
+        tabFeed.setTextColor(ContextCompat.getColor(this, R.color.chaomi_text_dim));
         tabFeed.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0x00000000));
     }
 
     // ---------- 信息流 ----------
 
     private void paintFeedSort() {
-        fLatest.setTextColor(feedSort.isEmpty() && !feedMine ? 0xFF58a6ff : 0xFF8b949e);
-        fHot.setTextColor("hot".equals(feedSort) ? 0xFF58a6ff : 0xFF8b949e);
-        fMine.setTextColor(feedMine ? 0xFF58a6ff : 0xFF8b949e);
-        fSearch.setTextColor((!feedQuery.isEmpty() || !feedTag.isEmpty()) ? 0xFF58a6ff : 0xFF8b949e);
+        fLatest.setTextColor(feedSort.isEmpty() && !feedMine ? ContextCompat.getColor(this, R.color.chaomi_accent) : ContextCompat.getColor(this, R.color.chaomi_text_dim));
+        fHot.setTextColor("hot".equals(feedSort) ? ContextCompat.getColor(this, R.color.chaomi_accent) : ContextCompat.getColor(this, R.color.chaomi_text_dim));
+        fMine.setTextColor(feedMine ? ContextCompat.getColor(this, R.color.chaomi_accent) : ContextCompat.getColor(this, R.color.chaomi_text_dim));
+        fSearch.setTextColor((!feedQuery.isEmpty() || !feedTag.isEmpty()) ? ContextCompat.getColor(this, R.color.chaomi_accent) : ContextCompat.getColor(this, R.color.chaomi_text_dim));
     }
 
     private void doFeedSearch() {
@@ -331,10 +355,10 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
     private void paintTagChip(TextView tv, boolean on) {
         GradientDrawable g = new GradientDrawable();
         g.setCornerRadius(24);
-        g.setColor(on ? 0xFF1f6feb : 0xFF21262d);
-        g.setStroke(1, on ? 0xFF58a6ff : 0xFF30363d);
+        g.setColor(on ? ContextCompat.getColor(this, R.color.chaomi_accent_2) : ContextCompat.getColor(this, R.color.chaomi_surface_2));
+        g.setStroke(1, on ? ContextCompat.getColor(this, R.color.chaomi_accent) : ContextCompat.getColor(this, R.color.chaomi_border));
         tv.setBackground(g);
-        tv.setTextColor(on ? Color.WHITE : 0xFF8b949e);
+        tv.setTextColor(on ? Color.WHITE : ContextCompat.getColor(this, R.color.chaomi_text_dim));
     }
 
     // ---------- 行情 ----------
@@ -396,7 +420,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         MaterialButton[] all = {sortLatest, sortPriceAsc, sortPriceDesc, sortChange};
         String[] keys = {"", "price_asc", "price_desc", "change"};
         for (int i = 0; i < all.length; i++) {
-            all[i].setTextColor(keys[i].equals(curSort) ? 0xFF58a6ff : 0xFF8b949e);
+            all[i].setTextColor(keys[i].equals(curSort) ? ContextCompat.getColor(this, R.color.chaomi_accent) : ContextCompat.getColor(this, R.color.chaomi_text_dim));
         }
     }
 
@@ -437,10 +461,10 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
     private void paintChip(TextView tv, boolean on) {
         GradientDrawable g = new GradientDrawable();
         g.setCornerRadius(28);
-        g.setColor(on ? 0xFF1f6feb : 0xFF21262d);
-        g.setStroke(1, on ? 0xFF58a6ff : 0xFF30363d);
+        g.setColor(on ? ContextCompat.getColor(this, R.color.chaomi_accent_2) : ContextCompat.getColor(this, R.color.chaomi_surface_2));
+        g.setStroke(1, on ? ContextCompat.getColor(this, R.color.chaomi_accent) : ContextCompat.getColor(this, R.color.chaomi_border));
         tv.setBackground(g);
-        tv.setTextColor(on ? Color.WHITE : 0xFF8b949e);
+        tv.setTextColor(on ? Color.WHITE : ContextCompat.getColor(this, R.color.chaomi_text_dim));
     }
 
     // ---------- 交互 ----------

@@ -1,6 +1,7 @@
 package com.chaomi.app;
 
 import android.content.Context;
+import androidx.core.content.ContextCompat;
 import android.graphics.Canvas;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
@@ -32,10 +33,10 @@ public class LatencyChartView extends View {
         fill.setStyle(Paint.Style.FILL);
         dot.setStyle(Paint.Style.FILL);
         text.setTextSize(dp(10f));
-        text.setColor(0xFF8b949e);
+        text.setColor(ContextCompat.getColor(c, R.color.chaomi_text_dim));
         grid.setStyle(Paint.Style.STROKE);
         grid.setStrokeWidth(dp(0.7f));
-        grid.setColor(0xFF30363d);
+        grid.setColor(ContextCompat.getColor(c, R.color.chaomi_border));
     }
 
     private float dp(float v) {
@@ -85,7 +86,7 @@ public class LatencyChartView extends View {
             ys[i] = padT + ph * (max - data[i]) / (float) max;
         }
 
-        int color = qualityColor(data[n - 1]);
+        int color = qualityColor(getContext(), data[n - 1]);
         line.setColor(color);
         dot.setColor(color);
 
@@ -120,10 +121,10 @@ public class LatencyChartView extends View {
     }
 
     /** 延迟分档配色：<60 绿、<150 蓝、<300 金、其余红 */
-    static int qualityColor(int ms) {
-        if (ms < 60) return 0xFF3fb950;
-        if (ms < 150) return 0xFF58a6ff;
-        if (ms < 300) return 0xFFe3b341;
-        return 0xFFf85149;
+    static int qualityColor(Context c, int ms) {
+        if (ms < 60) return ContextCompat.getColor(c, R.color.chaomi_down);
+        if (ms < 150) return ContextCompat.getColor(c, R.color.chaomi_accent);
+        if (ms < 300) return ContextCompat.getColor(c, R.color.chaomi_gold);
+        return ContextCompat.getColor(c, R.color.chaomi_up);
     }
 }

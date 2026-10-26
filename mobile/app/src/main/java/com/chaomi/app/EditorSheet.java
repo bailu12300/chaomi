@@ -1,5 +1,7 @@
 package com.chaomi.app;
 
+import androidx.core.content.ContextCompat;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
@@ -123,7 +125,7 @@ public class EditorSheet extends BottomSheetDialog {
                     break;
                 case "quote":
                     text.setHint("引用一段话…");
-                    text.setBackgroundColor(0xFF1c2128);
+                    text.setBackgroundColor(ContextCompat.getColor(activity, R.color.chaomi_surface_2));
                     break;
                 case "topic":
                     text.setHint("话题名，如 装机 / 显卡 / 二手");

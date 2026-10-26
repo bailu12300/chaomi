@@ -1,13 +1,28 @@
 <resources>
-    <color name="chaomi_bg">#0d1117</color>
-    <color name="chaomi_surface">#161b22</color>
-    <color name="chaomi_surface_2">#1c2128</color>
-    <color name="chaomi_accent">#58a6ff</color>
-    <color name="chaomi_accent_2">#1f6feb</color>
-    <color name="chaomi_gold">#e3b341</color>
-    <color name="chaomi_text">#e6edf3</color>
-    <color name="chaomi_text_dim">#8b949e</color>
-    <color name="chaomi_border">#30363d</color>
-    <color name="chaomi_up">#3fb950</color>
-    <color name="chaomi_down">#f85149</color>
+    <!-- ===== 浅色主题（默认，见 values-night 为深色）===== -->
+    <color name="chaomi_bg">#f6f8fa</color>
+    <color name="chaomi_surface">#ffffff</color>
+    <color name="chaomi_surface_2">#eef1f4</color>
+    <color name="chaomi_accent">#0969da</color>
+    <color name="chaomi_accent_2">#0550ae</color>
+    <color name="chaomi_gold">#9a6700</color>
+    <color name="chaomi_text">#1f2328</color>
+    <color name="chaomi_text_dim">#636c76</color>
+    <color name="chaomi_border">#d0d7de</color>
+
+    <!-- 涨跌：国内习惯 涨=红 跌=绿 -->
+    <color name="chaomi_up">#cf222e</color>
+    <color name="chaomi_down">#1a7f37</color>
+    <color name="chaomi_flat">#636c76</color>
+
+    <!-- 语义别名，Java 里用 ContextCompat.getColor 取 -->
+    <color name="chaomi_danger">#cf222e</color>
+    <color name="chaomi_ok">#1a7f37</color>
+    <color name="chaomi_warn">#9a6700</color>
+    <color name="chaomi_code_bg">#f0f2f5</color>
+    <color name="chaomi_quote_bg">#f0f2f5</color>
+    <color name="chaomi_scrim">#33000000</color>
+    <color name="chaomi_syntax_str">#0a3069</color>
+    <color name="chaomi_syntax_num">#0550ae</color>
+    <color name="chaomi_syntax_kw">#cf222e</color>
 </resources>

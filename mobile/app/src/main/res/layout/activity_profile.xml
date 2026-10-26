@@ -37,8 +37,12 @@
                 android:orientation="horizontal">
 
                 <FrameLayout
+                    android:id="@+id/avatarBox"
                     android:layout_width="72dp"
-                    android:layout_height="72dp">
+                    android:layout_height="72dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="false">
 
                     <ImageView
                         android:id="@+id/avatar"

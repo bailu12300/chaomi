@@ -1,5 +1,7 @@
 package com.chaomi.app;
 
+import androidx.core.content.ContextCompat;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
@@ -71,7 +73,19 @@ public class ProfileActivity extends AppCompatActivity {
         adapter = new FeedAdapter(posts, this::openDetail, p -> { /* 主页不给赞，进详情 */ });
         postsView.setAdapter(adapter);
 
-        avatar.setOnClickListener(v -> {
+        // ★ 头像点击要绑在容器上：无头像时 avatar 是 INVISIBLE，绑它点不到
+        View avatarBox = findViewById(R.id.avatarBox);
+        if (avatarBox != null) {
+            avatarBox.setOnClickListener(v -> {
+                if (viewingSelf) pickAvatar();
+            });
+        } else {
+            avatar.setOnClickListener(v -> {
+                if (viewingSelf) pickAvatar();
+            });
+        }
+        // 首字占位也要能点
+        avatarLetter.setOnClickListener(v -> {
             if (viewingSelf) pickAvatar();
         });
 
@@ -189,7 +203,7 @@ public class ProfileActivity extends AppCompatActivity {
 
         TextView hint = new TextView(this);
         hint.setText("\nUID " + (me.uid == null ? "—" : me.uid) + " 不可修改，可用于被搜索");
-        hint.setTextColor(0xFF8b949e);
+        hint.setTextColor(ContextCompat.getColor(this, R.color.chaomi_text_dim));
         hint.setTextSize(11);
         box.addView(hint);
 
@@ -360,8 +374,8 @@ public class ProfileActivity extends AppCompatActivity {
     private int colorOf(String s) {
         int h = s == null ? 0 : s.hashCode();
         int[] palette = {
-                0xFF1f6feb, 0xFF238636, 0xFF8957e5, 0xFFbb8009,
-                0xFFda3633, 0xFF0d9488, 0xFF9333ea, 0xFFc2410c
+                ContextCompat.getColor(this, R.color.chaomi_accent_2), ContextCompat.getColor(this, R.color.chaomi_ok), 0xFF8957e5, ContextCompat.getColor(this, R.color.chaomi_warn),
+                ContextCompat.getColor(this, R.color.chaomi_danger), 0xFF0d9488, 0xFF9333ea, 0xFFc2410c
         };
         return palette[Math.abs(h) % palette.length];
     }

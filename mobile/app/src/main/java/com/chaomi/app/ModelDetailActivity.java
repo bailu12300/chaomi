@@ -1,6 +1,7 @@
 package com.chaomi.app;
 
 import android.content.Context;
+import androidx.core.content.ContextCompat;
 import android.os.Bundle;
 import android.widget.TextView;
 
@@ -66,10 +67,10 @@ public class ModelDetailActivity extends AppCompatActivity {
         double absDiff = getIntent().getDoubleExtra("changeAbs", 0);
         if (hasChange && pct != 0) {
             dChange.setText(money(absDiff) + "　" + String.format(Locale.US, "%+.2f%%", pct));
-            dChange.setTextColor(pct > 0 ? 0xFFf85149 : 0xFF3fb950);
+            dChange.setTextColor(pct > 0 ? ContextCompat.getColor(this, R.color.chaomi_up) : ContextCompat.getColor(this, R.color.chaomi_down));
         } else {
             dChange.setText("较上一轮持平");
-            dChange.setTextColor(0xFF8b949e);
+            dChange.setTextColor(ContextCompat.getColor(this, R.color.chaomi_text_dim));
         }
 
         String finalName = name.trim();
@@ -100,8 +101,8 @@ public class ModelDetailActivity extends AppCompatActivity {
                                 ? Utils.formatTime(h.prevAt) + " 价" : "上轮价");
                         pDiff.setText((h.prevDiff > 0 ? "+" : "") + money(h.prevDiff));
                         pPct.setText(String.format(Locale.US, "%+.2f%%", h.prevPct));
-                        int col = h.prevDiff > 0 ? 0xFFf85149
-                                : h.prevDiff < 0 ? 0xFF3fb950 : 0xFF8b949e;
+                        int col = h.prevDiff > 0 ? ContextCompat.getColor(this, R.color.chaomi_up)
+                                : h.prevDiff < 0 ? ContextCompat.getColor(this, R.color.chaomi_down) : ContextCompat.getColor(this, R.color.chaomi_text_dim);
                         pDiff.setTextColor(col);
                         pPct.setTextColor(col);
                         prevTitle.setText(h.prevDiff > 0 ? "对比上轮 · 涨价"

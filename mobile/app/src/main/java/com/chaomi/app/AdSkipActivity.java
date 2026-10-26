@@ -1,5 +1,7 @@
 package com.chaomi.app;
 
+import androidx.core.content.ContextCompat;
+
 import android.content.ComponentName;
 import android.content.Intent;
 import android.net.Uri;
@@ -79,13 +81,13 @@ public class AdSkipActivity extends AppCompatActivity {
     private void refreshState() {
         boolean acc = KeepAliveService.isAccessibilityOn(this);
         accState.setText(acc ? "无障碍权限：已开启" : "无障碍权限：未开启");
-        accState.setTextColor(acc ? 0xFF3fb950 : 0xFFf85149);
+        accState.setTextColor(acc ? ContextCompat.getColor(this, R.color.chaomi_down) : ContextCompat.getColor(this, R.color.chaomi_up));
         btnAcc.setText(acc ? "已开启" : "去开启");
         btnAcc.setEnabled(!acc);
 
         boolean batt = KeepAliveService.isIgnoringBattery(this);
         battState.setText(batt ? "后台保活：已加入白名单" : "后台保活：未加入白名单（易被清理）");
-        battState.setTextColor(batt ? 0xFF8b949e : 0xFFe3b341);
+        battState.setTextColor(batt ? ContextCompat.getColor(this, R.color.chaomi_text_dim) : ContextCompat.getColor(this, R.color.chaomi_gold));
         btnBatt.setVisibility(batt ? View.GONE : View.VISIBLE);
 
         int hits = AdSkipPrefs.hits(this);
