@@ -114,6 +114,17 @@
                         android:textSize="12sp" />
                 </LinearLayout>
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRules"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="42dp"
+                    android:layout_marginTop="10dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="规则管理（可导入第三方规则）"
+                    android:textSize="13sp" />
+
                 <TextView
                     android:id="@+id/hitInfo"
                     android:layout_width="match_parent"

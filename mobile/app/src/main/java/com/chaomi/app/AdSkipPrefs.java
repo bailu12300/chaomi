@@ -81,6 +81,15 @@ class AdSkipPrefs {
                 .apply();
     }
 
+    /** 摇一摇拦截计数 */
+    static void addShakeStop(Context c) {
+        sp(c).edit().putInt("shakeStops", sp(c).getInt("shakeStops", 0) + 1).apply();
+    }
+
+    static int shakeStops(Context c) {
+        return sp(c).getInt("shakeStops", 0);
+    }
+
     static int hits(Context c) {
         return sp(c).getInt("hits", 0);
     }

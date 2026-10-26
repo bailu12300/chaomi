@@ -36,6 +36,13 @@ public class SkipAdService extends AccessibilityService {
 
     private String lastPkg = "";
     private long lastClickAt = 0;
+    /** 当前窗口的 Activity 类名，供规则的 activityIds 匹配用 */
+    private String lastActivity = null;
+
+    /** 摇一摇守视：检测到摇动后立刻找「取消/关闭」把跳转掐断 */
+    private ShakeGuard shakeGuard;
+    /** 摇动后多久内积极扫描（毫秒），来自服务端配置 */
+    private long shakeWindowMs = 6000;
 
     @Override
     public void onServiceConnected() {
@@ -52,6 +59,21 @@ public class SkipAdService extends AccessibilityService {
         info.notificationTimeout = 50;
         setServiceInfo(info);
         Log.i(TAG, "无障碍服务已连接");
+
+        // 摇一摇守视：从服务端配置的阈值/窗口起步
+        shakeWindowMs = RuleSync.shakeWindow(this);
+        shakeGuard = new ShakeGuard(this);
+        shakeGuard.setThreshold(RuleSync.shakeThreshold(this));
+        shakeGuard.setCallback(mag -> {
+            Log.i(TAG, "摇动触发，开始主动关闭");
+            // 摇动后立刻在当前窗口找关闭入口
+            AccessibilityNodeInfo r = getRootInActiveWindow();
+            if (r != null) {
+                String p = lastPkg == null ? "" : lastPkg;
+                tryAntiShake(r, p);
+            }
+        });
+        if (RuleSync.shakeEnabled(this)) shakeGuard.start();
     }
 
     @Override
@@ -69,6 +91,12 @@ public class SkipAdService extends AccessibilityService {
         CharSequence pkgCs = event.getPackageName();
         if (pkgCs == null) return;
         final String pkg = pkgCs.toString();
+
+        // 记录当前 Activity，规则的 activityIds 靠它匹配
+        CharSequence cls = event.getClassName();
+        if (cls != null && type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            lastActivity = cls.toString();
+        }
 
         // 不处理自己与系统界面
         if (pkg.equals(getPackageName())
@@ -99,8 +127,195 @@ public class SkipAdService extends AccessibilityService {
         }
     }
 
-    /** 在给定根节点里找跳过按钮并点击 */
+    /**
+     * 优先走规则：规则命中就按规则动作执行（click / clickCenter / back / swipe）。
+     * 规则不命中再退回关键词兜底。这样导入的成熟规则优先，兜底保证不漏。
+     */
     private boolean tryClick(AccessibilityNodeInfo root, String pkg, long now) {
+        if (tryRules(root, pkg, now)) return true;
+        return tryKeywords(root, pkg, now);
+    }
+
+    /**
+     * 摇一摇善后：检测到摇动后，立刻把当前页面上的
+     * 「取消 / 关闭 / × / 不感兴趣」点掉，掐断即将发生的跳转。
+     *
+     * 顺序有讲究：先点「取消」类（摇一摇弹窗通常是取消），再点关闭符号。
+     */
+    private boolean tryAntiShake(AccessibilityNodeInfo root, String pkg) {
+        long now = System.currentTimeMillis();
+        String[][] stages = {
+                {"取消", "关闭广告", "不感兴趣", "以后再说", "跳过", "关闭"},
+                {"×", "✕", "✖", "╳", "✗", "⨯", "❌", "❎", "我知道了"},
+        };
+        for (String[] stage : stages) {
+            List<AccessibilityNodeInfo> found = new ArrayList<>();
+            collectMulti(root, java.util.Arrays.asList(stage), found, 0);
+            for (AccessibilityNodeInfo n : found) {
+                if (clickNode(n, 0)) {
+                    markHit(pkg, "摇一摇善后:" + textOf(n), now);
+                    AdSkipPrefs.addShakeStop(this);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** 规则引擎 */
+    private boolean tryRules(AccessibilityNodeInfo root, String pkg, long now) {
+        List<SkipRule> rules = RuleStore.enabledCached(this);
+        if (rules.isEmpty()) return false;
+
+        String activity = lastActivity;
+        for (SkipRule r : rules) {
+            if (!r.matchPackage(pkg)) continue;
+            // Activity 限定
+            if (!r.activityIds.isEmpty() && activity != null) {
+                boolean hit = false;
+                for (String a : r.activityIds) {
+                    if (activity.contains(a)) {
+                        hit = true;
+                        break;
+                    }
+                }
+                if (!hit) continue;
+            }
+            // Activity 排除
+            boolean excluded = false;
+            if (activity != null) {
+                for (String a : r.excludeActivityIds) {
+                    if (activity.contains(a)) {
+                        excluded = true;
+                        break;
+                    }
+                }
+            }
+            if (excluded) continue;
+
+            for (SkipRule.Action a : r.rules) {
+                if (execAction(root, a, pkg, r.name, now)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** 执行一个规则动作 */
+    private boolean execAction(AccessibilityNodeInfo root, SkipRule.Action a,
+                              String pkg, String ruleName, long now) {
+        int delay = a.delayMs > 0 ? a.delayMs : AdSkipPrefs.delayMs(this);
+
+        // back / swipe 这类无目标动作
+        if (a.isBack()) {
+            if (performGlobalAction(GLOBAL_ACTION_BACK)) {
+                markHit(pkg, "back ← " + ruleName, now);
+                return true;
+            }
+            return false;
+        }
+        if (a.isSwipe()) {
+            int w = getResources().getDisplayMetrics().widthPixels;
+            int h = getResources().getDisplayMetrics().heightPixels;
+            if (swipe(w / 2, (int) (h * 0.75), w / 2, (int) (h * 0.25), delay)) {
+                markHit(pkg, "swipe ← " + ruleName, now);
+                return true;
+            }
+            return false;
+        }
+
+        // 按 viewId 找
+        for (String vid : a.viewIds) {
+            List<AccessibilityNodeInfo> ns = null;
+            try {
+                ns = root.findAccessibilityNodeInfosByViewId(
+                        vid.contains(":id/") ? vid : pkg + ":id/" + vid);
+            } catch (Exception ignored) {
+            }
+            if (ns == null) continue;
+            for (AccessibilityNodeInfo n : ns) {
+                if (clickNode(n, delay)) {
+                    markHit(pkg, "id:" + vid + " ← " + ruleName, now);
+                    return true;
+                }
+            }
+        }
+
+        // 按文本 / desc 找
+        if (!a.matches.isEmpty()) {
+            List<AccessibilityNodeInfo> found = new ArrayList<>();
+            collectMulti(root, a.matches, found, 0);
+            for (AccessibilityNodeInfo n : found) {
+                if (clickNode(n, delay)) {
+                    markHit(pkg, textOf(n) + " ← " + ruleName, now);
+                    return true;
+                }
+            }
+        }
+
+        // 按归一化坐标点
+        if (a.position != null && a.position.length >= 2) {
+            int w = getResources().getDisplayMetrics().widthPixels;
+            int h = getResources().getDisplayMetrics().heightPixels;
+            double x = a.position[0], y = a.position[1];
+            int px = (int) (x <= 1 ? x * w : x);
+            int py = (int) (y <= 1 ? y * h : y);
+            if (tap(px, py, delay)) {
+                markHit(pkg, "pos(" + px + "," + py + ") ← " + ruleName, now);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 点一个节点：先 ACTION_CLICK，失败再手势 */
+    private boolean clickNode(AccessibilityNodeInfo n, int delay) {
+        AccessibilityNodeInfo target = clickableAncestor(n);
+        Rect r = new Rect();
+        (target != null ? target : n).getBoundsInScreen(r);
+        if (!plausible(r)) return false;
+
+        boolean ok = false;
+        if (target != null) {
+            try {
+                ok = target.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+            } catch (Exception ignored) {
+            }
+        }
+        if (!ok) ok = tap(r.centerX(), r.centerY(), delay);
+        return ok;
+    }
+
+    private void markHit(String pkg, String what, long now) {
+        lastPkg = pkg;
+        lastClickAt = now;
+        AdSkipPrefs.addHit(this, pkg);
+        Log.i(TAG, "规则命中: " + what + " @ " + pkg);
+    }
+
+    /** 按多个关键词收集节点 */
+    private void collectMulti(AccessibilityNodeInfo node, List<String> words,
+                             List<AccessibilityNodeInfo> out, int depth) {
+        if (node == null || depth > 16 || out.size() > 60) return;
+        String t = textOf(node);
+        if (!t.isEmpty()) {
+            for (String w : words) {
+                if (matchWord(t, java.util.Collections.singleton(w))) {
+                    out.add(node);
+                    break;
+                }
+            }
+        }
+        int n = node.getChildCount();
+        for (int i = 0; i < n; i++) {
+            try {
+                collectMulti(node.getChild(i), words, out, depth + 1);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    /** 关键词兜底（规则没命中时） */
+    private boolean tryKeywords(AccessibilityNodeInfo root, String pkg, long now) {
         Set<String> words = AdSkipPrefs.words(this);
         List<AccessibilityNodeInfo> found = new ArrayList<>();
         collect(root, words, found, 0);
@@ -147,6 +362,21 @@ public class SkipAdService extends AccessibilityService {
             p.moveTo(x, y);
             GestureDescription.Builder b = new GestureDescription.Builder();
             b.addStroke(new GestureDescription.StrokeDescription(p, Math.max(0, delayMs), 60));
+            return dispatchGesture(b.build(), null, null);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 滑动手势 */
+    private boolean swipe(int x1, int y1, int x2, int y2, int delayMs) {
+        if (Build.VERSION.SDK_INT < 24) return false;
+        try {
+            Path p = new Path();
+            p.moveTo(x1, y1);
+            p.lineTo(x2, y2);
+            GestureDescription.Builder b = new GestureDescription.Builder();
+            b.addStroke(new GestureDescription.StrokeDescription(p, Math.max(0, delayMs), 220));
             return dispatchGesture(b.build(), null, null);
         } catch (Exception e) {
             return false;
@@ -246,6 +476,12 @@ public class SkipAdService extends AccessibilityService {
         // 面积过滤：跳过按钮一般 < 屏幕面积 6%
         if ((long) r.width() * r.height() > (long) sw * sh * 0.06f) return false;
         return true;
+    }
+
+    @Override
+    public void onDestroy() {
+        if (shakeGuard != null) shakeGuard.stop();
+        super.onDestroy();
     }
 
     @Override

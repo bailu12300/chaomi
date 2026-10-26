@@ -50,6 +50,9 @@ public class AdSkipActivity extends AppCompatActivity {
 
         load();
 
+        findViewById(R.id.btnRules).setOnClickListener(v ->
+                startActivity(new android.content.Intent(this, RulesActivity.class)));
+
         btnAcc.setOnClickListener(v -> openAccessibility());
         btnBatt.setOnClickListener(v -> openBattery());
         btnSave.setOnClickListener(v -> save());

@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
@@ -155,6 +156,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         loadTags();
 
         startKeepAlive();
+        syncAdRules();
 
         realtime = new Realtime(this);
         Api.bg(() -> {
@@ -599,5 +601,17 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
                 .show();
     }
 
+
+
+    /** 后台静默同步一次在线规则（不打扰用户） */
+    private void syncAdRules() {
+        Api.bg(() -> {
+            try {
+                RuleSync.Result r = RuleSync.sync(this, false);
+                if (r.changed) Log.i("chaomi", "规则已更新: " + r.message);
+            } catch (Exception ignored) {
+            }
+        });
+    }
 
 }

@@ -57,6 +57,11 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".RulesActivity"
+            android:exported="false"
+            android:parentActivityName=".AdSkipActivity" />
+
+        <activity
             android:name=".AdSkipActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />

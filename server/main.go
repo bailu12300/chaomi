@@ -3109,6 +3109,11 @@ func doServe() error {
 	})
 	mux.HandleFunc("/api/article/parse", func(w http.ResponseWriter, r *http.Request) { handleArticleParse(w, r) })
 
+	// ---- 去广告规则库（服务端下发，客户端执行）----
+	mux.HandleFunc("/api/adrules", func(w http.ResponseWriter, r *http.Request) { handleAdRules(db, w, r) })
+	mux.HandleFunc("/api/adrules/report", handleAdRuleReport)
+	mux.HandleFunc("/api/adrules/stats", handleAdRuleStats)
+
 	// ---- 采集端（App 回传）----
 	mux.HandleFunc("/api/crawler/targets", func(w http.ResponseWriter, r *http.Request) { handleCrawlerTargets(db, w, r) })
 	mux.HandleFunc("/api/hw/ingest", func(w http.ResponseWriter, r *http.Request) { handleHWCrawlerIngest(db, w, r) })
