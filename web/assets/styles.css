@@ -139,3 +139,12 @@ button.primary{background:var(--gold); color:#1a1205; border:none; border-radius
 .toast{position:fixed; left:50%; bottom:30px; transform:translateX(-50%); background:var(--bg3);
   border:1px solid var(--line); color:var(--txt); padding:10px 18px; border-radius:999px; z-index:90; font-size:14px}
 @media (min-width:760px){ .sheet{align-items:center} .sheet-body{border-radius:18px} }
+
+/* 延迟指示：心跳每 3 秒一次（20 次/分钟） */
+.latchip{display:inline-flex; align-items:center; gap:6px; background:var(--bg2);
+  border:1px solid var(--line); border-radius:999px; padding:6px 11px; cursor:default;
+  font-size:12px; color:var(--mut); font-variant-numeric:tabular-nums}
+.latchip.good{color:var(--down); border-color:rgba(63,185,80,.5)}
+.latchip.ok{color:var(--acc); border-color:rgba(88,166,255,.4)}
+.latchip.warn{color:var(--gold); border-color:rgba(227,179,65,.5)}
+.latchip.bad{color:var(--up); border-color:rgba(240,82,74,.5)}

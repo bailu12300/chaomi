@@ -651,6 +651,69 @@
     }
   }
 
+  // ---------- 节点心跳：每 3 秒一次（20 次/分钟） ----------
+  const hb = { sent: 0, lost: 0, samples: [], timer: null };
+
+  function latClass(ms) {
+    if (ms < 60) return "good";
+    if (ms < 150) return "ok";
+    if (ms < 300) return "warn";
+    return "bad";
+  }
+
+  async function heartbeat() {
+    const t0 = performance.now();
+    try {
+      const r = await fetch(API + "/api/ping?t=" + Date.now(), { cache: "no-store" });
+      const j = await r.json();
+      let rtt = Math.round(performance.now() - t0);
+      const cost = (j && j.data && Number(j.data.costMs)) || 0;
+      // 扣掉服务端处理耗时，得到近似网络往返
+      if (cost > 0 && cost < rtt) rtt -= cost;
+      if (rtt < 0) rtt = 0;
+
+      hb.sent++;
+      hb.samples.push(rtt);
+      if (hb.samples.length > 40) hb.samples.shift();
+
+      const chip = $("#latChip");
+      const txt = $("#latText");
+      if (txt) txt.textContent = rtt + " ms";
+      if (chip) {
+        chip.className = "latchip " + latClass(rtt);
+        chip.title = `App ↔ 服务器延迟 ${rtt}ms\n心跳 ${hb.sent} 次 · 每 3 秒 1 次（20 次/分钟）`
+          + `\n丢包 ${hb.lost} 次`;
+      }
+      // 回传样本供服务端统计（失败不影响 UI）
+      fetch(API + "/api/ping/report", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rtt }),
+      }).catch(() => {});
+    } catch (e) {
+      hb.sent++;
+      hb.lost++;
+      const chip = $("#latChip");
+      const txt = $("#latText");
+      if (txt) txt.textContent = "超时";
+      if (chip) chip.className = "latchip bad";
+    }
+  }
+
+  function startHeartbeat() {
+    if (hb.timer) return;
+    heartbeat();
+    hb.timer = setInterval(heartbeat, 3000); // 20 次/分钟
+  }
+
+  // 页面切到后台时降频，省电也省流量；回来立刻补一次
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      if (hb.timer) { clearInterval(hb.timer); hb.timer = null; }
+    } else {
+      startHeartbeat();
+    }
+  });
+
   // ---------- 实时 WebSocket ----------
   let ws = null;
   function connectWS() {
@@ -686,6 +749,7 @@
   loadFeed();
   loadTags();
   loadCats();
+  startHeartbeat();
   connectWS();
   // 有 token 时校验一次，失效则静默清掉
   if (token()) {

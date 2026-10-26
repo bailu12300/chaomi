@@ -1327,6 +1327,15 @@ const appDownloadPage = `<!doctype html>
   <a class="btn" href="/downloads/__APK__">⬇ 下载安卓 App（APK）</a>
   <div class="meta">版本 __VER__ · 原生应用 · 支持 Android 5.0 及以上</div>
   <div class="tip">安装提示：安卓默认禁止「未知来源」安装。下载后点击 APK，按提示允许「允许来自此来源的应用」即可安装。</div>
+  <div class="tip" style="margin-top:10px">
+    <b style="color:#e3b341">本版功能</b><br>
+    · 硬件行情：显卡/处理器/固态/内存，走势图与涨跌榜<br>
+    · 图文社区：文字/图片/链接，公众号一键转原生文章<br>
+    · 账号体系：邮箱注册，发帖评论点赞记在名下<br>
+    · <b>净屏</b>：无障碍自动点掉开屏广告（需手动授权）<br>
+    · <b>节点</b>：实时延迟监控，每 3 秒心跳（20 次/分钟）<br>
+    · 后台常驻：开机自启 + 定时自愈
+  </div>
   <details>
     <summary>装不上？点这里看排查步骤</summary>
     <ol>
