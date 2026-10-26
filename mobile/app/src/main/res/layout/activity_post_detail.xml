@@ -78,6 +78,14 @@
                 android:autoLink="web"
                 android:linksClickable="true" />
 
+            <!-- 文章原生渲染容器（公众号图文转原生，不使用 WebView） -->
+            <LinearLayout
+                android:id="@+id/blocksBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone" />
+
             <LinearLayout
                 android:id="@+id/imagesRow"
                 android:layout_width="match_parent"
@@ -85,13 +93,30 @@
                 android:orientation="vertical"
                 android:layout_marginTop="8dp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/likeBtn"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:textColor="@color/zaoba_accent" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/likeBtn"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/zaoba_accent" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/deleteBtn"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="删除"
+                    android:textColor="@color/zaoba_down"
+                    android:visibility="gone" />
+            </LinearLayout>
 
             <TextView
                 android:layout_width="match_parent"

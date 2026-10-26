@@ -3072,6 +3072,9 @@ func doServe() error {
 	if err := ensureCommunitySchema(db); err != nil {
 		log.Printf("[serve] community schema: %v", err)
 	}
+	if err := ensureAuthSchema(db); err != nil {
+		log.Printf("[serve] auth schema: %v", err)
+	}
 	go hub.run()
 	mux.HandleFunc("/api/hw/models", func(w http.ResponseWriter, r *http.Request) { handleHWModels(db, w, r) })
 	mux.HandleFunc("/api/hw/status", func(w http.ResponseWriter, r *http.Request) { handleHWStatus(db, w, r) })
@@ -3105,6 +3108,24 @@ func doServe() error {
 		handleCommunityPost(db, w, r, id)
 	})
 	mux.HandleFunc("/api/article/parse", func(w http.ResponseWriter, r *http.Request) { handleArticleParse(w, r) })
+
+	// ---- 账号体系 ----
+	mux.HandleFunc("/api/auth/register", func(w http.ResponseWriter, r *http.Request) { handleAuthRegister(db, w, r) })
+	mux.HandleFunc("/api/auth/login", func(w http.ResponseWriter, r *http.Request) { handleAuthLogin(db, w, r) })
+	mux.HandleFunc("/api/auth/logout", func(w http.ResponseWriter, r *http.Request) { handleAuthLogout(db, w, r) })
+	mux.HandleFunc("/api/auth/me", func(w http.ResponseWriter, r *http.Request) { handleAuthMe(db, w, r) })
+	mux.HandleFunc("/api/auth/profile", func(w http.ResponseWriter, r *http.Request) { handleAuthProfile(db, w, r) })
+	mux.HandleFunc("/api/user/", func(w http.ResponseWriter, r *http.Request) {
+		rest := strings.TrimPrefix(r.URL.Path, "/api/user/")
+		handleUserProfile(db, w, r, cParseID(strings.SplitN(rest, "/", 2)[0]))
+	})
+	// ---- 社区增强 ----
+	mux.HandleFunc("/api/community/tags", func(w http.ResponseWriter, r *http.Request) { handleCommunityTags(db, w, r) })
+	mux.HandleFunc("/api/community/comment/", func(w http.ResponseWriter, r *http.Request) {
+		rest := strings.TrimPrefix(r.URL.Path, "/api/community/comment/")
+		handleCommunityDeleteComment(db, w, r, cParseID(strings.SplitN(rest, "/", 2)[0]))
+	})
+	mux.HandleFunc("/api/article/import", func(w http.ResponseWriter, r *http.Request) { handleArticleImport(db, w, r) })
 	mux.HandleFunc("/api/community/upload", func(w http.ResponseWriter, r *http.Request) { handleCommunityUpload(w, r) })
 	mux.HandleFunc("/ws/community", func(w http.ResponseWriter, r *http.Request) { serveWsCommunity(w, r) })
 	// 社区 SPA 静态托管

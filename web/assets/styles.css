@@ -29,6 +29,30 @@ body{
   border-radius:8px; padding:7px 10px; font-size:13px}
 .dot{width:9px; height:9px; border-radius:50%; background:var(--mut); display:inline-block}
 .dot.on{background:var(--down)} .dot.off{background:#6b2020}
+.accbtn{background:var(--bg2); border:1px solid var(--line); color:var(--acc);
+  border-radius:8px; padding:7px 12px; font-size:13px; cursor:pointer; max-width:110px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.accbtn.on{color:var(--gold); border-color:var(--gold)}
+
+.feedbar{display:flex; gap:8px; align-items:center; margin-bottom:10px}
+.feedbar .sorts{flex:0 0 auto; display:flex; gap:6px}
+.fs{background:transparent; border:1px solid var(--line); color:var(--mut);
+  border-radius:8px; padding:7px 12px; font-size:12px; cursor:pointer}
+.fs.active{color:var(--acc); border-color:var(--acc); background:rgba(88,166,255,.1)}
+#feedSearch{flex:1; min-width:0; background:var(--bg2); border:1px solid var(--line);
+  color:var(--txt); border-radius:8px; padding:9px 12px; font-size:13px}
+#feedSearch:focus{outline:none; border-color:var(--acc)}
+
+.authform{display:flex; flex-direction:column; gap:10px}
+.authform input{background:var(--bg2); border:1px solid var(--line); color:var(--txt);
+  border-radius:10px; padding:12px 14px; font-size:14px}
+.authform input:focus{outline:none; border-color:var(--acc)}
+.authform .primary{margin-top:4px; padding:12px; border-radius:10px; font-size:15px}
+.linkbtn{background:transparent; border:none; color:var(--acc); font-size:13px;
+  cursor:pointer; padding:8px}
+.tipm{color:var(--mut); font-size:11px; margin:2px 0 0}
+.tags .tagc{background:rgba(88,166,255,.12); color:var(--acc); border-radius:6px;
+  padding:2px 7px; font-size:11px; margin-right:6px; display:inline-block; margin-top:6px; cursor:pointer}
 
 main{max-width:760px; margin:0 auto; padding:16px}
 .view{display:none} .view.active{display:block}

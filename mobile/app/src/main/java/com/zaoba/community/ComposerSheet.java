@@ -8,9 +8,11 @@ import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.Chip;
@@ -32,12 +34,15 @@ public class ComposerSheet extends BottomSheetDialog {
     private final OnPublished cb;
     private String currentType = "text";
     private final List<Api.Part> imageParts = new ArrayList<>();
+    private Article parsedArticle;
 
     private ChipGroup typeGroup;
     private EditText titleEt, bodyEt, linkEt, articleEt, nickEt;
     private View bodyBox, linkBox, articleBox, imageBox;
     private MaterialButton pickBtn, parseBtn, publishBtn;
-    private LinearLayout imagesRow;
+    private LinearLayout imagesRow, articlePreview;
+    private View articlePreviewScroll;
+    private TextView articleMeta;
 
     public ComposerSheet(AppCompatActivity activity, String nick, OnPublished cb) {
         super(activity);
@@ -60,8 +65,16 @@ public class ComposerSheet extends BottomSheetDialog {
         parseBtn = v.findViewById(R.id.parseBtn);
         publishBtn = v.findViewById(R.id.publishBtn);
         imagesRow = v.findViewById(R.id.imagesRow);
+        articlePreview = v.findViewById(R.id.articlePreview);
+        articlePreviewScroll = v.findViewById(R.id.articlePreviewScroll);
+        articleMeta = v.findViewById(R.id.articleMeta);
 
-        if (nick != null) nickEt.setText(nick);
+        nickEt.setText(nick == null ? "匿名" : nick);
+        // 已登录时昵称以账号为准，避免冒名
+        if (Session.loggedIn(activity)) {
+            nickEt.setEnabled(false);
+            nickEt.setText(Session.nick(activity));
+        }
 
         typeGroup.setOnCheckedChangeListener((g, checkedId) -> {
             if (checkedId == R.id.typeText) setType("text");
@@ -143,33 +156,51 @@ public class ComposerSheet extends BottomSheetDialog {
         }
     }
 
+    /** 解析公众号链接 → 原生块 → 就地预览 */
     private void parseArticle() {
         String url = articleEt.getText().toString().trim();
         if (url.isEmpty()) { toast("请先粘贴公众号文章链接"); return; }
         parseBtn.setEnabled(false);
+        parseBtn.setText("解析中…");
         Api.bg(() -> {
             try {
                 Article a = Api.parseArticle(url);
                 activity.runOnUiThread(() -> {
-                    if (a.title != null && titleEt.getText().toString().trim().isEmpty())
-                        titleEt.setText(a.title);
-                    if (a.content != null) bodyEt.setText(a.content);
-                    toast("解析完成");
                     parseBtn.setEnabled(true);
+                    parseBtn.setText(activity.getString(R.string.parse));
+                    if (a == null) { toast("解析失败"); return; }
+                    parsedArticle = a;
+                    if (a.title != null && !a.title.isEmpty()
+                            && titleEt.getText().toString().trim().isEmpty()) {
+                        titleEt.setText(a.title);
+                    }
+                    int n = a.blocks == null ? 0 : a.blocks.size();
+                    articleMeta.setVisibility(View.VISIBLE);
+                    articleMeta.setText("已解析 " + n + " 段"
+                            + (a.author == null || a.author.isEmpty() ? "" : " · 来源 " + a.author)
+                            + " · 发布后为原生文章（不是网页）");
+                    articlePreviewScroll.setVisibility(View.VISIBLE);
+                    ArticleRenderer.render(activity, articlePreview, a.blocks);
+                    toast("解析完成，确认预览后发布");
                 });
             } catch (Exception e) {
                 activity.runOnUiThread(() -> {
-                    toast("解析失败：" + e.getMessage());
                     parseBtn.setEnabled(true);
+                    parseBtn.setText(activity.getString(R.string.parse));
+                    toast("解析失败：" + e.getMessage());
                 });
             }
         });
     }
 
     private void publish() {
+        if (!Session.loggedIn(activity)) {
+            toast("请先登录再发布");
+            return;
+        }
         Post p = new Post();
         p.type = currentType;
-        p.author = nickEt.getText().toString().trim();
+        p.author = Session.nick(activity);
         p.title = titleEt.getText().toString().trim();
 
         if ("text".equals(currentType)) {
@@ -183,11 +214,23 @@ public class ComposerSheet extends BottomSheetDialog {
             if (imageParts.isEmpty()) { toast("请选择至少一张图片"); return; }
             p.body = bodyEt.getText().toString().trim();
         } else if ("article".equals(currentType)) {
-            p.body = bodyEt.getText().toString().trim();
-            if (p.title.isEmpty()) { toast("标题不能为空"); return; }
+            if (parsedArticle == null || parsedArticle.blocks == null
+                    || parsedArticle.blocks.isEmpty()) {
+                toast("请先解析文章，确认内容后再发布");
+                return;
+            }
+            p.blocks = parsedArticle.blocks;
+            p.url = parsedArticle.url;
+            p.cover = parsedArticle.cover;
+            if (p.title.isEmpty() && parsedArticle.title != null) {
+                p.title = parsedArticle.title;
+            }
+            String extra = bodyEt.getText().toString().trim();
+            if (!extra.isEmpty()) p.body = extra;
         }
 
         publishBtn.setEnabled(false);
+        publishBtn.setText("发布中…");
         Api.bg(() -> {
             try {
                 if ("image".equals(currentType)) {
@@ -197,12 +240,14 @@ public class ComposerSheet extends BottomSheetDialog {
                 Post saved = Api.createPost(p);
                 activity.runOnUiThread(() -> {
                     publishBtn.setEnabled(true);
+                    publishBtn.setText(activity.getString(R.string.publish));
                     if (cb != null) cb.onPublished(saved);
                     dismiss();
                 });
             } catch (Exception e) {
                 activity.runOnUiThread(() -> {
                     publishBtn.setEnabled(true);
+                    publishBtn.setText(activity.getString(R.string.publish));
                     toast("发布失败：" + e.getMessage());
                 });
             }

@@ -1,5 +1,5 @@
 // 早八社区 Service Worker —— 离线缓存应用壳
-const CACHE = "zaoba-community-v2";
+const CACHE = "zaoba-community-v3";
 const SHELL = ["/community", "/community/assets/styles.css", "/community/assets/app.js", "/community/assets/manifest.webmanifest"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

@@ -144,6 +144,32 @@
             android:layout_marginTop="6dp"
             android:text="@string/parse"
             android:textColor="#ffffff" />
+
+        <TextView
+            android:id="@+id/articleMeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/zaoba_text_dim"
+            android:textSize="11sp"
+            android:visibility="gone" />
+
+        <!-- 解析结果原生预览（确认无误再发布为原生文章） -->
+        <ScrollView
+            android:id="@+id/articlePreviewScroll"
+            android:layout_width="match_parent"
+            android:layout_height="260dp"
+            android:layout_marginTop="6dp"
+            android:background="@color/zaoba_bg"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/articlePreview"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="10dp" />
+        </ScrollView>
     </LinearLayout>
 
     <!-- 图片选择 -->

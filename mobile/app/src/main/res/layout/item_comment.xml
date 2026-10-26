@@ -28,6 +28,17 @@
             android:layout_height="wrap_content"
             android:textColor="@color/zaoba_text_dim"
             android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/cDelete"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:padding="2dp"
+            android:text="删除"
+            android:textColor="@color/zaoba_down"
+            android:textSize="11sp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <TextView

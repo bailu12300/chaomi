@@ -78,8 +78,26 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.VH> {
             h.imagesScroll.setVisibility(View.GONE);
         }
 
-        h.likeBtn.setText("♥ " + p.likes);
+        h.likeBtn.setText((p.liked ? "♥ " : "♡ ") + p.likes);
+        h.likeBtn.setTextColor(p.liked ? 0xFFf85149 : 0xFF8b949e);
         h.commentBtn.setText("💬 " + p.commentCount);
+
+        // 标签
+        h.tagsRow.removeAllViews();
+        if (p.tags != null && !p.tags.isEmpty()) {
+            h.tagsRow.setVisibility(View.VISIBLE);
+            int max = Math.min(p.tags.size(), 4);
+            for (int i = 0; i < max; i++) {
+                TextView t = new TextView(h.itemView.getContext());
+                t.setText("#" + p.tags.get(i));
+                t.setTextSize(11);
+                t.setTextColor(0xFF58a6ff);
+                t.setPadding(0, 0, 14, 0);
+                h.tagsRow.addView(t);
+            }
+        } else {
+            h.tagsRow.setVisibility(View.GONE);
+        }
 
         h.itemView.setOnClickListener(v -> { if (itemClick != null) itemClick.open(p); });
         h.likeBtn.setOnClickListener(v -> { if (likeClick != null) likeClick.like(p); });
@@ -87,9 +105,23 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.VH> {
     }
 
     private String bodyPreview(Post p) {
-        if (p.body != null && !p.body.isEmpty()) return p.body;
+        if (p.body != null && !p.body.trim().isEmpty()) {
+            String s = p.body.trim().replaceAll("\\s+", " ");
+            return s.length() > 140 ? s.substring(0, 140) + "…" : s;
+        }
         if ("link".equals(p.type) && p.url != null) return p.url;
-        if ("article".equals(p.type) && p.title != null) return "公众号图文 · " + p.title;
+        if ("article".equals(p.type)) {
+            // 有原生块时用首段做预览，比标题更实在
+            if (p.blocks != null) {
+                for (Block b : p.blocks) {
+                    if (b != null && b.text != null && !b.text.trim().isEmpty()) {
+                        String s = b.text.trim();
+                        return s.length() > 140 ? s.substring(0, 140) + "…" : s;
+                    }
+                }
+            }
+            return "公众号图文";
+        }
         return "";
     }
 
@@ -107,7 +139,7 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.VH> {
 
     static class VH extends RecyclerView.ViewHolder {
         TextView typeChip, author, time, title, body, likeBtn, commentBtn;
-        LinearLayout imagesRow;
+        LinearLayout imagesRow, tagsRow;
         View imagesScroll;
 
         VH(View v) {
@@ -120,6 +152,7 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.VH> {
             likeBtn = v.findViewById(R.id.likeBtn);
             commentBtn = v.findViewById(R.id.commentBtn);
             imagesRow = v.findViewById(R.id.imagesRow);
+            tagsRow = v.findViewById(R.id.tagsRow);
             imagesScroll = v.findViewById(R.id.imagesScroll);
         }
     }

@@ -5,15 +5,19 @@ import java.util.List;
 /** 社区帖子 */
 class Post {
     long id;
+    long userId;
     String type;       // text | image | link | article
     String title;
     String body;
     String cover;
     String url;
     List<String> images;
+    List<Block> blocks;   // article 类型的原生块
     String author;
     List<String> tags;
     int likes;
+    boolean liked;
+    int views;
     int commentCount;
     long createdAt;
 }
@@ -22,15 +26,26 @@ class Post {
 class Comment {
     long id;
     long postId;
+    long userId;
     String author;
     String body;
     long createdAt;
+    boolean mine;
 }
 
 /** 帖子详情 = 帖子 + 评论列表 */
 class PostAndComments {
     Post post;
     List<Comment> comments;
+    boolean mine;
+}
+
+/** 文章原生块：客户端据此原生渲染，不依赖 WebView */
+class Block {
+    String type;   // p | h2 | h3 | img | quote | code | li
+    String text;
+    String src;
+    String alt;
 }
 
 /** 公众号图文解析结果 */
@@ -42,6 +57,26 @@ class Article {
     List<String> images;
     String url;
     String summary;
+    List<Block> blocks;
+    int count;
+}
+
+/** 账号 */
+class User {
+    long id;
+    String email;
+    String nick;
+    String avatar;
+    String bio;
+    long createdAt;
+    long lastLogin;
+    int postCount;
+}
+
+/** 登录 / 注册返回 */
+class AuthResult {
+    String token;
+    User user;
 }
 
 /** 硬件行情型号 */

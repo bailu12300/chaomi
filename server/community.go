@@ -33,15 +33,19 @@ var communityDir string
 
 type CPost struct {
 	ID           int64    `json:"id"`
+	UserID       int64    `json:"userId,omitempty"`
 	Type         string   `json:"type"` // text | image | link | article
 	Title        string   `json:"title,omitempty"`
 	Body         string   `json:"body,omitempty"`
 	Cover        string   `json:"cover,omitempty"`
 	URL          string   `json:"url,omitempty"`
 	Images       []string `json:"images,omitempty"`
+	Blocks       []CBlock `json:"blocks,omitempty"` // article 类型的原生块
 	Author       string   `json:"author"`
 	Tags         []string `json:"tags,omitempty"`
 	Likes        int      `json:"likes"`
+	Liked        bool     `json:"liked,omitempty"`
+	Views        int      `json:"views,omitempty"`
 	CommentCount int      `json:"commentCount"`
 	CreatedAt    int64    `json:"createdAt"`
 }
@@ -49,9 +53,11 @@ type CPost struct {
 type CComment struct {
 	ID        int64  `json:"id"`
 	PostID    int64  `json:"postId"`
+	UserID    int64  `json:"userId,omitempty"`
 	Author    string `json:"author"`
 	Body      string `json:"body"`
 	CreatedAt int64  `json:"createdAt"`
+	Mine      bool   `json:"mine,omitempty"`
 }
 
 type CArticle struct {
@@ -76,15 +82,20 @@ func ensureCommunitySchema(db *sql.DB) error {
 			cover VARCHAR(512),
 			url VARCHAR(1024),
 			images MEDIUMTEXT,
+			blocks MEDIUMTEXT,
 			author VARCHAR(64),
 			tags MEDIUMTEXT,
+			user_id BIGINT DEFAULT 0,
 			likes INT DEFAULT 0,
+			views INT DEFAULT 0,
 			created_at BIGINT NOT NULL,
-			INDEX idx_cposts_ct(created_at)
+			INDEX idx_cposts_ct(created_at),
+			INDEX idx_cposts_uid(user_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 		`CREATE TABLE IF NOT EXISTS c_comments(
 			id BIGINT AUTO_INCREMENT PRIMARY KEY,
 			post_id BIGINT NOT NULL,
+			user_id BIGINT DEFAULT 0,
 			author VARCHAR(64),
 			body MEDIUMTEXT,
 			created_at BIGINT NOT NULL,
@@ -96,15 +107,29 @@ func ensureCommunitySchema(db *sql.DB) error {
 			return err
 		}
 	}
+	// 老库补字段（幂等）
+	for _, c := range [][3]string{
+		{"c_posts", "blocks", "blocks MEDIUMTEXT"},
+		{"c_posts", "user_id", "user_id BIGINT DEFAULT 0"},
+		{"c_posts", "views", "views INT DEFAULT 0"},
+		{"c_comments", "user_id", "user_id BIGINT DEFAULT 0"},
+	} {
+		if err := cAddColumn(db, c[0], c[1], c[2]); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
+// cPostColumns 统一的帖子列清单，保证各处扫描顺序一致
+const cPostColumns = `id,user_id,type,title,body,cover,url,images,blocks,author,tags,likes,views,created_at`
+
 func cScanPost(scan func(...interface{}) error) (CPost, error) {
 	var p CPost
-	var images, tags sql.NullString
+	var images, tags, blocks sql.NullString
 	var created int64
-	err := scan(&p.ID, &p.Type, &p.Title, &p.Body, &p.Cover, &p.URL,
-		&images, &p.Author, &tags, &p.Likes, &created)
+	err := scan(&p.ID, &p.UserID, &p.Type, &p.Title, &p.Body, &p.Cover, &p.URL,
+		&images, &blocks, &p.Author, &tags, &p.Likes, &p.Views, &created)
 	if err != nil {
 		return p, err
 	}
@@ -115,54 +140,41 @@ func cScanPost(scan func(...interface{}) error) (CPost, error) {
 	if tags.Valid && tags.String != "" {
 		_ = json.Unmarshal([]byte(tags.String), &p.Tags)
 	}
+	if blocks.Valid && blocks.String != "" {
+		_ = json.Unmarshal([]byte(blocks.String), &p.Blocks)
+	}
 	return p, nil
 }
 
 func cCreatePost(db *sql.DB, p CPost) (CPost, error) {
 	imgs, _ := json.Marshal(p.Images)
 	tags, _ := json.Marshal(p.Tags)
+	blk := "[]"
+	if len(p.Blocks) > 0 {
+		b, _ := json.Marshal(p.Blocks)
+		blk = string(b)
+	}
 	res, err := db.Exec(
-		`INSERT INTO c_posts(type,title,body,cover,url,images,author,tags,created_at)
-		 VALUES(?,?,?,?,?,?,?,?,?)`,
-		p.Type, p.Title, p.Body, p.Cover, p.URL, string(imgs), p.Author, string(tags), p.CreatedAt)
+		`INSERT INTO c_posts(user_id,type,title,body,cover,url,images,blocks,author,tags,created_at)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+		p.UserID, p.Type, p.Title, p.Body, p.Cover, p.URL, string(imgs), blk, p.Author, string(tags), p.CreatedAt)
 	if err != nil {
 		return p, err
 	}
 	id, _ := res.LastInsertId()
 	p.ID = id
 	p.Likes = 0
+	p.Views = 0
 	p.CommentCount = 0
 	return p, nil
 }
 
 func cListPosts(db *sql.DB, before int64, limit int) ([]CPost, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 30
-	}
-	rows, err := db.Query(
-		`SELECT id,type,title,body,cover,url,images,author,tags,likes,created_at
-		 FROM c_posts WHERE (?=0 OR created_at<?) ORDER BY created_at DESC LIMIT ?`,
-		before, before, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := make([]CPost, 0)
-	for rows.Next() {
-		p, err := cScanPost(rows.Scan)
-		if err != nil {
-			continue
-		}
-		p.CommentCount = cCommentCount(db, p.ID)
-		out = append(out, p)
-	}
-	return out, nil
+	return cListPostsEx(db, before, limit, "", "", 0, "")
 }
 
 func cGetPost(db *sql.DB, id int64) (CPost, error) {
-	row := db.QueryRow(
-		`SELECT id,type,title,body,cover,url,images,author,tags,likes,created_at
-		 FROM c_posts WHERE id=?`, id)
+	row := db.QueryRow(`SELECT `+cPostColumns+` FROM c_posts WHERE id=?`, id)
 	p, err := cScanPost(row.Scan)
 	if err != nil {
 		return p, err
@@ -179,8 +191,8 @@ func cCommentCount(db *sql.DB, postID int64) int {
 
 func cAddComment(db *sql.DB, postID int64, c CComment) (CComment, error) {
 	res, err := db.Exec(
-		`INSERT INTO c_comments(post_id,author,body,created_at) VALUES(?,?,?,?)`,
-		postID, c.Author, c.Body, c.CreatedAt)
+		`INSERT INTO c_comments(post_id,user_id,author,body,created_at) VALUES(?,?,?,?,?)`,
+		postID, c.UserID, c.Author, c.Body, c.CreatedAt)
 	if err != nil {
 		return c, err
 	}
@@ -191,7 +203,7 @@ func cAddComment(db *sql.DB, postID int64, c CComment) (CComment, error) {
 
 func cListComments(db *sql.DB, postID int64) ([]CComment, error) {
 	rows, err := db.Query(
-		`SELECT id,post_id,author,body,created_at FROM c_comments WHERE post_id=? ORDER BY created_at ASC`,
+		`SELECT id,post_id,user_id,author,body,created_at FROM c_comments WHERE post_id=? ORDER BY created_at ASC`,
 		postID)
 	if err != nil {
 		return nil, err
@@ -200,7 +212,7 @@ func cListComments(db *sql.DB, postID int64) ([]CComment, error) {
 	var out []CComment
 	for rows.Next() {
 		var c CComment
-		if err := rows.Scan(&c.ID, &c.PostID, &c.Author, &c.Body, &c.CreatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.PostID, &c.UserID, &c.Author, &c.Body, &c.CreatedAt); err != nil {
 			continue
 		}
 		out = append(out, c)
@@ -821,8 +833,28 @@ func parseInt(s string) (int64, error) {
 // ===== 社区 API handlers =====
 
 func handleCommunityFeed(db *sql.DB, w http.ResponseWriter, r *http.Request) {
-	before, _ := parseInt(r.URL.Query().Get("before"))
-	posts, err := cListPosts(db, before, 30)
+	qp := r.URL.Query()
+	before, _ := parseInt(qp.Get("before"))
+	limit, _ := parseInt(qp.Get("limit"))
+	tag := strings.TrimSpace(strings.TrimPrefix(qp.Get("tag"), "#"))
+	kw := strings.TrimSpace(qp.Get("q"))
+	sortBy := strings.TrimSpace(qp.Get("sort")) // hot | 空
+	mine := qp.Get("mine") == "1"
+
+	u := cAuthUser(db, r)
+	var uid int64
+	if u != nil {
+		uid = u.ID
+	}
+	if mine && uid == 0 {
+		writeJSON(w, 401, map[string]string{"error": "请先登录"})
+		return
+	}
+	filterUID := int64(0)
+	if mine {
+		filterUID = uid
+	}
+	posts, err := cListPostsEx(db, before, int(limit), tag, kw, filterUID, sortBy)
 	if err != nil {
 		writeJSON(w, 500, map[string]string{"error": err.Error()})
 		return
@@ -836,21 +868,49 @@ func handleCommunityCreatePost(db *sql.DB, w http.ResponseWriter, r *http.Reques
 		writeJSON(w, 400, map[string]string{"error": "请求体解析失败: " + err.Error()})
 		return
 	}
+	u := cAuthUser(db, r)
+	if u != nil {
+		p.UserID = u.ID
+	}
 	p.Type = strings.TrimSpace(p.Type)
 	if p.Type == "" {
 		p.Type = "text"
 	}
-	if strings.TrimSpace(p.Author) == "" {
-		p.Author = "匿名"
-	}
+	p.Author = cAuthorName(u, p.Author)
 	p.Body = strings.TrimSpace(p.Body)
 	p.Title = strings.TrimSpace(p.Title)
-	if p.Body == "" && p.Title == "" && p.URL == "" && len(p.Images) == 0 {
+	if p.Body == "" && p.Title == "" && p.URL == "" && len(p.Images) == 0 && len(p.Blocks) == 0 {
 		writeJSON(w, 400, map[string]string{"error": "内容不能为空"})
 		return
 	}
+	// 文章类：只带 blocks 时，从块里回填正文摘要，保证信息流能预览
+	if p.Type == "article" && p.Body == "" && len(p.Blocks) > 0 {
+		var parts []string
+		for _, b := range p.Blocks {
+			if b.Text != "" {
+				parts = append(parts, b.Text)
+			}
+			if len([]rune(strings.Join(parts, ""))) > 300 {
+				break
+			}
+		}
+		p.Body = strings.Join(parts, "\n")
+	}
+	if len(p.Images) == 0 && len(p.Blocks) > 0 {
+		for _, b := range p.Blocks {
+			if b.Type == "img" && b.Src != "" {
+				p.Images = append(p.Images, b.Src)
+			}
+		}
+	}
+	if p.Cover == "" && len(p.Images) > 0 {
+		p.Cover = p.Images[0]
+	}
 	for _, t := range cExtractTags(p.Body + " " + p.Title) {
 		p.Tags = cAppendUnique(p.Tags, t)
+	}
+	if len(p.Images) > 30 {
+		p.Images = p.Images[:30]
 	}
 	p.CreatedAt = time.Now().UnixMilli()
 	saved, err := cCreatePost(db, p)
@@ -863,6 +923,12 @@ func handleCommunityCreatePost(db *sql.DB, w http.ResponseWriter, r *http.Reques
 }
 
 func handleCommunityPost(db *sql.DB, w http.ResponseWriter, r *http.Request, id int64) {
+	u := cAuthUser(db, r)
+	var uid int64
+	if u != nil {
+		uid = u.ID
+	}
+	path := r.URL.Path
 	switch {
 	case r.Method == http.MethodGet:
 		p, err := cGetPost(db, id)
@@ -870,20 +936,34 @@ func handleCommunityPost(db *sql.DB, w http.ResponseWriter, r *http.Request, id 
 			writeJSON(w, 404, map[string]string{"error": "帖子不存在"})
 			return
 		}
+		cIncView(db, id)
+		p.Views++
+		p.Liked = cPostLiked(db, id, uid)
 		comments, _ := cListComments(db, id)
-		writeJSON(w, 200, map[string]interface{}{"code": 0, "data": p, "comments": comments})
-	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/comments"):
+		for i := range comments {
+			comments[i].Mine = uid > 0 && comments[i].UserID == uid
+		}
+		writeJSON(w, 200, map[string]interface{}{
+			"code": 0, "data": p, "comments": comments,
+			"mine": uid > 0 && p.UserID == uid,
+		})
+	case r.Method == http.MethodPost && strings.HasSuffix(path, "/comments"):
 		var c CComment
 		if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
 			writeJSON(w, 400, map[string]string{"error": "请求体解析失败"})
 			return
 		}
-		if strings.TrimSpace(c.Author) == "" {
-			c.Author = "匿名"
+		if u != nil {
+			c.UserID = u.ID
 		}
+		c.Author = cAuthorName(u, c.Author)
 		c.Body = strings.TrimSpace(c.Body)
 		if c.Body == "" {
 			writeJSON(w, 400, map[string]string{"error": "评论不能为空"})
+			return
+		}
+		if len([]rune(c.Body)) > 2000 {
+			writeJSON(w, 400, map[string]string{"error": "评论过长"})
 			return
 		}
 		c.CreatedAt = time.Now().UnixMilli()
@@ -894,14 +974,16 @@ func handleCommunityPost(db *sql.DB, w http.ResponseWriter, r *http.Request, id 
 		}
 		hub.broadcastJSON(map[string]interface{}{"type": "new_comment", "postId": id, "comment": saved})
 		writeJSON(w, 201, map[string]interface{}{"code": 0, "data": saved})
-	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/like"):
-		n, err := cLikePost(db, id)
+	case r.Method == http.MethodPost && strings.HasSuffix(path, "/like"):
+		n, liked, err := cToggleLike(db, id, uid)
 		if err != nil {
 			writeJSON(w, 500, map[string]string{"error": err.Error()})
 			return
 		}
 		hub.broadcastJSON(map[string]interface{}{"type": "like", "postId": id, "likes": n})
-		writeJSON(w, 200, map[string]interface{}{"code": 0, "data": n})
+		writeJSON(w, 200, map[string]interface{}{"code": 0, "data": n, "liked": liked})
+	case r.Method == http.MethodDelete:
+		handleCommunityDelete(db, w, r, id)
 	default:
 		http.NotFound(w, r)
 	}
@@ -921,12 +1003,24 @@ func handleArticleParse(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "缺少 url 参数"})
 		return
 	}
-	art, err := cParseArticle(u)
+	art, blocks, err := cParseArticleNative(u)
 	if err != nil {
 		writeJSON(w, 502, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": art})
+	// 同时返回 html(content) 和 blocks：老客户端继续用 content，
+	// 新客户端用 blocks 做原生渲染，无需 WebView。
+	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": map[string]interface{}{
+		"title":   art.Title,
+		"author":  art.Author,
+		"cover":   art.Cover,
+		"content": art.Content,
+		"images":  art.Images,
+		"url":     art.URL,
+		"summary": art.Summary,
+		"blocks":  blocks,
+		"count":   len(blocks),
+	}})
 }
 
 // ===== 工具 =====
