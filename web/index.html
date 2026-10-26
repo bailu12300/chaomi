@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d1117" />
+  <title>早八社区 · 硬件 & 好文</title>
+  <link rel="manifest" href="assets/manifest.webmanifest" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">早八</span>
+      <span class="tag">社区 · 硬件行情 & 好文分享</span>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-view="feed">信息流</button>
+      <button class="tab" data-view="market">硬件行情</button>
+      <button class="tab post-btn" id="openComposer">＋ 发布</button>
+    </nav>
+    <div class="me">
+      <input id="nick" placeholder="昵称" maxlength="20" />
+      <span id="wsdot" class="dot off" title="实时连接"></span>
+    </div>
+  </header>
+
+  <main>
+    <section id="feed" class="view active">
+      <div id="postList"></div>
+      <div id="feedEmpty" class="empty">还没有内容，点「＋ 发布」发第一条吧。</div>
+      <div id="feedLoading" class="loading">加载中…</div>
+    </section>
+
+    <section id="market" class="view">
+      <div class="market-tools">
+        <input id="hwSearch" placeholder="搜型号 / 品牌，如 5070、9700X" />
+        <div id="hwCats" class="chips"></div>
+        <div class="sorts">
+          <button class="st active" data-sort="">最新</button>
+          <button class="st" data-sort="price_asc">价格低</button>
+          <button class="st" data-sort="price_desc">价格高</button>
+          <button class="st" data-sort="change">涨跌榜</button>
+        </div>
+        <div id="marketHint" class="mhint"></div>
+      </div>
+      <div id="marketList" class="market-grid"></div>
+      <div id="marketEmpty" class="empty">行情加载中…</div>
+    </section>
+  </main>
+
+  <!-- 型号详情（走势图） -->
+  <div id="mdl" class="sheet hidden">
+    <div class="sheet-mask" data-close></div>
+    <div class="sheet-body wide">
+      <div class="sheet-head">
+        <span id="mdlTitle">型号详情</span>
+        <button class="x" data-close>✕</button>
+      </div>
+      <div id="mdlBody"></div>
+    </div>
+  </div>
+
+  <!-- 发布器 -->
+  <div id="composer" class="sheet hidden">
+    <div class="sheet-mask" data-close></div>
+    <div class="sheet-body">
+      <div class="sheet-head">
+        <span>发布内容</span>
+        <button class="x" data-close>✕</button>
+      </div>
+      <div class="type-tabs">
+        <button class="tt active" data-type="text">文字</button>
+        <button class="tt" data-type="image">图片</button>
+        <button class="tt" data-type="link">链接</button>
+        <button class="tt" data-type="article">公众号图文</button>
+      </div>
+
+      <div class="pane" data-pane="text">
+        <textarea id="t_body" rows="5" placeholder="说点什么… 用 #话题 标记标签"></textarea>
+      </div>
+      <div class="pane hidden" data-pane="image">
+        <input id="i_url" placeholder="图片直链 URL（https://…）" />
+        <input id="i_title" placeholder="一句话说明（可选）" />
+      </div>
+      <div class="pane hidden" data-pane="link">
+        <input id="l_url" placeholder="链接 URL（https://…）" />
+        <input id="l_title" placeholder="标题" />
+        <input id="l_cover" placeholder="封面图 URL（可选）" />
+        <textarea id="l_body" rows="3" placeholder="摘要（可选）"></textarea>
+      </div>
+      <div class="pane hidden" data-pane="article">
+        <div class="article-importer">
+          <input id="a_url" placeholder="粘贴公众号文章链接 mp.weixin.qq.com/…" />
+          <button id="a_parse">解析</button>
+        </div>
+        <div id="a_preview" class="article-preview hidden"></div>
+      </div>
+
+      <div class="sheet-foot">
+        <span class="hint">以 <b id="nickEcho">匿名</b> 发布</span>
+        <button id="submitPost" class="primary">发布</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 帖子详情（评论） -->
+  <div id="detail" class="sheet hidden">
+    <div class="sheet-mask" data-close></div>
+    <div class="sheet-body wide">
+      <div class="sheet-head">
+        <span>帖子详情</span>
+        <button class="x" data-close>✕</button>
+      </div>
+      <div id="detailBody"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

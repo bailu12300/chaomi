@@ -1,0 +1,12 @@
+{
+  "name": "早八社区",
+  "short_name": "早八",
+  "description": "硬件行情 & 好文分享社区",
+  "start_url": "/community",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

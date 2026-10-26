@@ -1,0 +1,1277 @@
+package main
+
+// ---------------- 社区模块（在现有 早八 上编译兼容迭代） ----------------
+// 新增：文字/图片/链接/公众号图文 帖子、信息流、评论、点赞、WebSocket 实时、
+//       公众号图文解析、硬件行情复用（/api/hw/models / /api/hw/status）。
+
+import (
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"math"
+	"math/rand"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/gorilla/websocket"
+)
+
+// 社区静态根目录（由 main.go 在 doServe 中赋值），用于图片上传落盘
+var communityDir string
+
+// ===== 数据结构 =====
+
+type CPost struct {
+	ID           int64    `json:"id"`
+	Type         string   `json:"type"` // text | image | link | article
+	Title        string   `json:"title,omitempty"`
+	Body         string   `json:"body,omitempty"`
+	Cover        string   `json:"cover,omitempty"`
+	URL          string   `json:"url,omitempty"`
+	Images       []string `json:"images,omitempty"`
+	Author       string   `json:"author"`
+	Tags         []string `json:"tags,omitempty"`
+	Likes        int      `json:"likes"`
+	CommentCount int      `json:"commentCount"`
+	CreatedAt    int64    `json:"createdAt"`
+}
+
+type CComment struct {
+	ID        int64  `json:"id"`
+	PostID    int64  `json:"postId"`
+	Author    string `json:"author"`
+	Body      string `json:"body"`
+	CreatedAt int64  `json:"createdAt"`
+}
+
+type CArticle struct {
+	Title   string   `json:"title"`
+	Author  string   `json:"author"`
+	Cover   string   `json:"cover"`
+	Content string   `json:"content"`
+	Images  []string `json:"images"`
+	URL     string   `json:"url"`
+	Summary string   `json:"summary"`
+}
+
+// ===== 存储 =====
+
+func ensureCommunitySchema(db *sql.DB) error {
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS c_posts(
+			id BIGINT AUTO_INCREMENT PRIMARY KEY,
+			type VARCHAR(16) NOT NULL,
+			title VARCHAR(255),
+			body MEDIUMTEXT,
+			cover VARCHAR(512),
+			url VARCHAR(1024),
+			images MEDIUMTEXT,
+			author VARCHAR(64),
+			tags MEDIUMTEXT,
+			likes INT DEFAULT 0,
+			created_at BIGINT NOT NULL,
+			INDEX idx_cposts_ct(created_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+		`CREATE TABLE IF NOT EXISTS c_comments(
+			id BIGINT AUTO_INCREMENT PRIMARY KEY,
+			post_id BIGINT NOT NULL,
+			author VARCHAR(64),
+			body MEDIUMTEXT,
+			created_at BIGINT NOT NULL,
+			INDEX idx_c_comments_pid(post_id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+	}
+	for _, s := range stmts {
+		if _, err := db.Exec(s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func cScanPost(scan func(...interface{}) error) (CPost, error) {
+	var p CPost
+	var images, tags sql.NullString
+	var created int64
+	err := scan(&p.ID, &p.Type, &p.Title, &p.Body, &p.Cover, &p.URL,
+		&images, &p.Author, &tags, &p.Likes, &created)
+	if err != nil {
+		return p, err
+	}
+	p.CreatedAt = created
+	if images.Valid && images.String != "" {
+		_ = json.Unmarshal([]byte(images.String), &p.Images)
+	}
+	if tags.Valid && tags.String != "" {
+		_ = json.Unmarshal([]byte(tags.String), &p.Tags)
+	}
+	return p, nil
+}
+
+func cCreatePost(db *sql.DB, p CPost) (CPost, error) {
+	imgs, _ := json.Marshal(p.Images)
+	tags, _ := json.Marshal(p.Tags)
+	res, err := db.Exec(
+		`INSERT INTO c_posts(type,title,body,cover,url,images,author,tags,created_at)
+		 VALUES(?,?,?,?,?,?,?,?,?)`,
+		p.Type, p.Title, p.Body, p.Cover, p.URL, string(imgs), p.Author, string(tags), p.CreatedAt)
+	if err != nil {
+		return p, err
+	}
+	id, _ := res.LastInsertId()
+	p.ID = id
+	p.Likes = 0
+	p.CommentCount = 0
+	return p, nil
+}
+
+func cListPosts(db *sql.DB, before int64, limit int) ([]CPost, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 30
+	}
+	rows, err := db.Query(
+		`SELECT id,type,title,body,cover,url,images,author,tags,likes,created_at
+		 FROM c_posts WHERE (?=0 OR created_at<?) ORDER BY created_at DESC LIMIT ?`,
+		before, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]CPost, 0)
+	for rows.Next() {
+		p, err := cScanPost(rows.Scan)
+		if err != nil {
+			continue
+		}
+		p.CommentCount = cCommentCount(db, p.ID)
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+func cGetPost(db *sql.DB, id int64) (CPost, error) {
+	row := db.QueryRow(
+		`SELECT id,type,title,body,cover,url,images,author,tags,likes,created_at
+		 FROM c_posts WHERE id=?`, id)
+	p, err := cScanPost(row.Scan)
+	if err != nil {
+		return p, err
+	}
+	p.CommentCount = cCommentCount(db, id)
+	return p, nil
+}
+
+func cCommentCount(db *sql.DB, postID int64) int {
+	var n int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM c_comments WHERE post_id=?`, postID).Scan(&n)
+	return n
+}
+
+func cAddComment(db *sql.DB, postID int64, c CComment) (CComment, error) {
+	res, err := db.Exec(
+		`INSERT INTO c_comments(post_id,author,body,created_at) VALUES(?,?,?,?)`,
+		postID, c.Author, c.Body, c.CreatedAt)
+	if err != nil {
+		return c, err
+	}
+	c.ID, _ = res.LastInsertId()
+	c.PostID = postID
+	return c, nil
+}
+
+func cListComments(db *sql.DB, postID int64) ([]CComment, error) {
+	rows, err := db.Query(
+		`SELECT id,post_id,author,body,created_at FROM c_comments WHERE post_id=? ORDER BY created_at ASC`,
+		postID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []CComment
+	for rows.Next() {
+		var c CComment
+		if err := rows.Scan(&c.ID, &c.PostID, &c.Author, &c.Body, &c.CreatedAt); err != nil {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+func cLikePost(db *sql.DB, id int64) (int, error) {
+	_, err := db.Exec(`UPDATE c_posts SET likes=likes+1 WHERE id=?`, id)
+	if err != nil {
+		return 0, err
+	}
+	var n int
+	_ = db.QueryRow(`SELECT likes FROM c_posts WHERE id=?`, id).Scan(&n)
+	return n, nil
+}
+
+// ===== 硬件行情复用（基于现有 jd_latest / jd_rounds / price_history） =====
+// 融合目标：社区 App 内直接获得 早八 的全部行情能力（品类、搜索、排序、涨跌榜、单型号走势）。
+
+// hwItem 行情条目：列表 / 涨跌榜 / 详情共用同一结构
+type hwItem struct {
+	Key         string    `json:"key"`
+	Cat         string    `json:"cat"`
+	CatLabel    string    `json:"catLabel"`
+	Brand       string    `json:"brand"`
+	Model       string    `json:"model"`
+	Spec        string    `json:"spec"`
+	Keyword     string    `json:"keyword"`
+	Price       any       `json:"price"`
+	Platform    string    `json:"platform"`
+	Shop        string    `json:"shop"`
+	Title       string    `json:"title"`
+	Trend       string    `json:"trend"`
+	PrevPrice   any       `json:"prevPrice"`
+	ChangePct   float64   `json:"changePct"`
+	HasChange   bool      `json:"hasChange"`
+	Trends      []float64 `json:"trends"`
+	NoMatch     bool      `json:"noMatch"`
+	UpdatedAt   int64     `json:"updatedAt"`
+	PriceStatus string    `json:"priceStatus"`
+}
+
+// hwChg 轮次间的价格变动（用于涨跌榜/涨跌幅展示）
+type hwChg struct {
+	From float64
+	To   float64
+	Pct  float64
+}
+
+// hwStableKey 稳定身份：row_key 跨轮次会变（早期是 gpu-rtx-50 这类系列键，
+// 后期变成内容哈希），不能用来串时间轴。用「品类+品牌+型号+规格」做身份，
+// 再 hex 编码成 URL 安全串，既能定位历史，也不会把中文塞进路径。
+func hwStableKey(cat, brand, model, spec string) string {
+	raw := normCat(cat) + "|" + strings.TrimSpace(brand) + "|" + strings.TrimSpace(model) + "|" + specKey(cat, model, spec)
+	return hex.EncodeToString([]byte(raw))
+}
+
+func hwDecodeKey(key string) (cat, brand, model, spec string, ok bool) {
+	b, err := hex.DecodeString(strings.TrimSpace(key))
+	if err != nil {
+		return "", "", "", "", false
+	}
+	parts := strings.Split(string(b), "|")
+	if len(parts) < 4 {
+		return "", "", "", "", false
+	}
+	return parts[0], parts[1], parts[2], parts[3], true
+}
+
+// hwMatch 判断某行是否属于该稳定身份
+func hwMatch(cat, brand, model, spec string, rCat, rBrand, rModel, rSpec string) bool {
+	if normCat(rCat) != cat {
+		return false
+	}
+	if strings.TrimSpace(rBrand) != brand || strings.TrimSpace(rModel) != model {
+		return false
+	}
+	return specKey(rCat, rModel, rSpec) == spec
+}
+
+// hwRoundChanges 取每个型号在最近 2 个采集轮次之间的涨跌幅（按稳定身份聚合，
+// 同一轮多店铺取最低价，避免同轮噪声）。
+func hwRoundChanges(db *sql.DB) map[string]hwChg {
+	out := map[string]hwChg{}
+	rows, err := db.Query(`
+		SELECT ts, cat_label, brand, model, spec, price FROM jd_rounds
+		WHERE price IS NOT NULL AND price > 0 AND ts >= (
+			SELECT MIN(ts) FROM (
+				SELECT DISTINCT ts FROM jd_rounds ORDER BY ts DESC LIMIT 2
+			) t
+		) ORDER BY ts ASC`)
+	if err != nil {
+		log.Printf("hwRoundChanges: %v", err)
+		return out
+	}
+	defer rows.Close()
+	type rp struct {
+		ts    int64
+		price float64
+	}
+	// key -> ts -> 最低价
+	seq := map[string]map[int64]float64{}
+	for rows.Next() {
+		var ts int64
+		var cl, bm, md, sp sql.NullString
+		var pr sql.NullFloat64
+		if err := rows.Scan(&ts, &cl, &bm, &md, &sp, &pr); err != nil || !pr.Valid {
+			continue
+		}
+		k := hwStableKey(cl.String, bm.String, md.String, sp.String)
+		if seq[k] == nil {
+			seq[k] = map[int64]float64{}
+		}
+		if cur, ok := seq[k][ts]; !ok || pr.Float64 < cur {
+			seq[k][ts] = pr.Float64
+		}
+	}
+	for k, byTs := range seq {
+		if len(byTs) < 2 {
+			continue
+		}
+		tss := make([]int64, 0, len(byTs))
+		for t := range byTs {
+			tss = append(tss, t)
+		}
+		sort.Slice(tss, func(i, j int) bool { return tss[i] < tss[j] })
+		first, last := byTs[tss[0]], byTs[tss[len(tss)-1]]
+		if first <= 0 || first == last {
+			continue
+		}
+		out[k] = hwChg{From: first, To: last, Pct: (last - first) / first * 100}
+	}
+	return out
+}
+
+func handleHWModels(db *sql.DB, w http.ResponseWriter, r *http.Request) {
+	cat := normCat(strings.TrimSpace(r.URL.Query().Get("cat")))
+	kw := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+	sortBy := strings.TrimSpace(r.URL.Query().Get("sort"))
+	limit := 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 500 {
+			limit = n
+		}
+	}
+	chgs := hwRoundChanges(db)
+
+	rows, err := db.Query(
+		`SELECT row_key,cat_label,brand,model,spec,title,price,shop,platform,trend,prev_price,ts
+		 FROM jd_latest ORDER BY ts DESC`)
+	if err != nil {
+		writeJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	data := []hwItem{}
+	for rows.Next() {
+		var rowKey, catLabel, brand, model, spec, title, shop, platform, trend, ts sql.NullString
+		var price, prevPrice sql.NullFloat64
+		if err := rows.Scan(&rowKey, &catLabel, &brand, &model, &spec, &title, &price, &shop, &platform, &trend, &prevPrice, &ts); err != nil {
+			continue
+		}
+		nc := normCat(catLabel.String)
+		if cat != "" && nc != cat {
+			continue
+		}
+		if kw != "" {
+			hay := strings.ToLower(brand.String + " " + model.String + " " + spec.String + " " + title.String)
+			if !strings.Contains(hay, kw) {
+				continue
+			}
+		}
+		it := hwItem{
+			Key: hwStableKey(catLabel.String, brand.String, model.String, spec.String),
+			Cat: nc, CatLabel: nc,
+			Brand: brand.String, Model: model.String, Spec: spec.String,
+			Keyword: model.String, Platform: platform.String, Shop: shop.String,
+			Title: title.String, Trend: trend.String,
+			PrevPrice: nullFloat(prevPrice), UpdatedAt: atoi64(ts.String) * 1000,
+		}
+		if price.Valid {
+			it.Price = price.Float64
+			it.PriceStatus = "ok"
+			if c, ok := chgs[it.Key]; ok {
+				it.ChangePct = math.Round(c.Pct*100) / 100
+				it.HasChange = hwPlausible(it.ChangePct)
+			} else if prevPrice.Valid && prevPrice.Float64 > 0 {
+				it.ChangePct = math.Round((price.Float64-prevPrice.Float64)/prevPrice.Float64*10000) / 100
+				it.HasChange = hwPlausible(it.ChangePct)
+			}
+			if !it.HasChange {
+				it.ChangePct = 0
+			}
+			spark := []float64{}
+			if prevPrice.Valid && prevPrice.Float64 > 0 {
+				spark = append(spark, prevPrice.Float64)
+			}
+			spark = append(spark, price.Float64)
+			it.Trends = spark
+		} else {
+			it.Price = nil
+			it.NoMatch = true
+			it.PriceStatus = "nomatch"
+			it.Trends = []float64{}
+		}
+		data = append(data, it)
+	}
+
+	switch sortBy {
+	case "price_asc":
+		sort.SliceStable(data, func(i, j int) bool { return hwPrice(data[i]) < hwPrice(data[j]) })
+	case "price_desc":
+		sort.SliceStable(data, func(i, j int) bool { return hwPrice(data[i]) > hwPrice(data[j]) })
+	case "change_desc":
+		sort.SliceStable(data, func(i, j int) bool { return data[i].ChangePct > data[j].ChangePct })
+	case "change_asc":
+		sort.SliceStable(data, func(i, j int) bool { return data[i].ChangePct < data[j].ChangePct })
+	}
+	if limit > 0 && len(data) > limit {
+		data = data[:limit]
+	}
+	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": map[string]interface{}{"count": len(data), "models": data}})
+}
+
+func hwPrice(it hwItem) float64 {
+	if f, ok := it.Price.(float64); ok {
+		return f
+	}
+	return math.MaxFloat64
+}
+
+// hwSpark 单型号走势（合并采集轮次 + 历史序列），最多 n 个点，按时间升序
+func hwSpark(db *sql.DB, key string, n int) []float64 {
+	pts := hwHistoryPoints(db, key)
+	if len(pts) > n {
+		pts = pts[len(pts)-n:]
+	}
+	out := make([]float64, len(pts))
+	for i, p := range pts {
+		out[i] = p.Ref
+	}
+	return out
+}
+
+// hwPoint 时间轴上的一个价格点
+type hwPoint struct {
+	Ts  int64
+	Ref float64
+	Lo  float64
+	Hi  float64
+}
+
+// hwHistoryPoints 按稳定身份取全量历史点（升序去重）。
+// jd_rounds 提供轮次价格，price_history 提供增量落库的历史，
+// 两张表都按 model 粗筛后在 Go 里按「品类+品牌+型号+规格」精确过滤。
+func hwHistoryPoints(db *sql.DB, key string) []hwPoint {
+	cat, brand, model, spec, ok := hwDecodeKey(key)
+	if !ok {
+		return nil
+	}
+	byTs := map[int64]*hwPoint{}
+	// 轮次价格
+	if rows, err := db.Query(`SELECT ts, cat_label, brand, model, spec, price FROM jd_rounds WHERE model=? ORDER BY ts ASC`, model); err == nil {
+		for rows.Next() {
+			var ts int64
+			var cl, bm, md, sp sql.NullString
+			var pr sql.NullFloat64
+			if err := rows.Scan(&ts, &cl, &bm, &md, &sp, &pr); err != nil || !pr.Valid || pr.Float64 <= 0 {
+				continue
+			}
+			if !hwMatch(cat, brand, model, spec, cl.String, bm.String, md.String, sp.String) {
+				continue
+			}
+			if cur, exists := byTs[ts]; !exists || pr.Float64 < cur.Ref {
+				byTs[ts] = &hwPoint{Ts: ts, Ref: pr.Float64, Lo: pr.Float64, Hi: pr.Float64}
+			}
+		}
+		rows.Close()
+	}
+	// 历史序列：price_history 的 sample 存的是商品标题，不能按型号匹配；
+	// 统一用 jd_latest.row_key 关联（新导入的历史点也用同一 row_key 落库）。
+	if rows, err := db.Query(`
+		SELECT ph.ts, ph.cat, ph.ref_price, ph.lo_price, ph.hi_price, ph.row_key
+		FROM price_history ph JOIN jd_latest j ON j.row_key = ph.row_key
+		WHERE j.model=?`, model); err == nil {
+		for rows.Next() {
+			var ts int64
+			var cl, rk sql.NullString
+			var ref, lo, hi sql.NullFloat64
+			if err := rows.Scan(&ts, &cl, &ref, &lo, &hi, &rk); err != nil || !ref.Valid || ref.Float64 <= 0 {
+				continue
+			}
+			if cat != "" && normCat(cl.String) != cat {
+				continue
+			}
+			if _, exists := byTs[ts]; exists {
+				continue
+			}
+			p := &hwPoint{Ts: ts, Ref: ref.Float64, Lo: ref.Float64, Hi: ref.Float64}
+			if lo.Valid && lo.Float64 > 0 {
+				p.Lo = lo.Float64
+			}
+			if hi.Valid && hi.Float64 > 0 {
+				p.Hi = hi.Float64
+			}
+			byTs[ts] = p
+		}
+		rows.Close()
+	}
+	out := make([]hwPoint, 0, len(byTs))
+	for _, p := range byTs {
+		out = append(out, *p)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Ts < out[j].Ts })
+	return out
+}
+
+func handleHWStatus(db *sql.DB, w http.ResponseWriter, r *http.Request) {
+	var n int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM jd_latest`).Scan(&n)
+	var ts int64
+	_ = db.QueryRow(`SELECT COALESCE(MAX(ts),0) FROM jd_latest`).Scan(&ts)
+	var rounds int
+	_ = db.QueryRow(`SELECT COUNT(DISTINCT ts) FROM jd_rounds`).Scan(&rounds)
+	writeJSON(w, 200, map[string]interface{}{
+		"code": 0,
+		"data": map[string]interface{}{
+			"count":     n,
+			"updatedAt": ts * 1000,
+			"rounds":    rounds,
+			"source":    "jd_latest",
+		},
+	})
+}
+
+// ===== 硬件行情：分类 + 单型号历史 + 涨跌榜 =====
+
+var hwCatOrder = []string{"显卡", "处理器", "固态硬盘", "内存条", "笔记本", "游戏主机"}
+
+// handleHWCatLabels 返回归一化后的品类（带数量），顺序与 App tab 一致
+func handleHWCatLabels(db *sql.DB, w http.ResponseWriter, r *http.Request) {
+	rows, err := db.Query(`SELECT cat_label, COUNT(*) FROM jd_latest WHERE cat_label IS NOT NULL AND cat_label<>'' GROUP BY cat_label`)
+	if err != nil {
+		writeJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+	cnt := map[string]int{}
+	for rows.Next() {
+		var c string
+		var n int
+		if err := rows.Scan(&c, &n); err == nil {
+			cnt[normCat(c)] += n
+		}
+	}
+	type catItem struct {
+		Cat   string `json:"cat"`
+		Count int    `json:"count"`
+	}
+	out := []catItem{}
+	for _, c := range hwCatOrder {
+		if cnt[c] > 0 {
+			out = append(out, catItem{c, cnt[c]})
+		}
+	}
+	// 兜底：不在白名单里的品类也放出来，避免数据被藏
+	for c, n := range cnt {
+		if catIndex(c) == 99 && n > 0 {
+			out = append(out, catItem{c, n})
+		}
+	}
+	total := 0
+	for _, v := range cnt {
+		total += v
+	}
+	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": map[string]interface{}{
+		"total": total,
+		"cats":  out,
+	}})
+}
+
+func catIndex(c string) int {
+	for i, x := range hwCatOrder {
+		if x == c {
+			return i
+		}
+	}
+	return 99
+}
+
+// handleHWHistory 单型号价格走势：合并采集轮次 + 历史序列，按时间升序去重
+func handleHWHistory(db *sql.DB, w http.ResponseWriter, r *http.Request, key string) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		http.NotFound(w, r)
+		return
+	}
+	pts := hwHistoryPoints(db, key)
+	type ptJSON struct {
+		Ts  int64   `json:"ts"`
+		Ref float64 `json:"ref"`
+		Lo  float64 `json:"lo"`
+		Hi  float64 `json:"hi"`
+	}
+	data := make([]ptJSON, 0, len(pts))
+	var minP, maxP, sum float64
+	for _, p := range pts {
+		data = append(data, ptJSON{p.Ts, p.Ref, p.Lo, p.Hi})
+		if minP == 0 || p.Ref < minP {
+			minP = p.Ref
+		}
+		if p.Ref > maxP {
+			maxP = p.Ref
+		}
+		sum += p.Ref
+	}
+	last := 0.0
+	if n := len(data); n > 0 {
+		last = data[n-1].Ref
+	}
+	avg := 0.0
+	if len(data) > 0 {
+		avg = math.Round(sum/float64(len(data))*100) / 100
+	}
+	chg := 0.0
+	chgPct := 0.0
+	if len(data) > 1 && data[0].Ref > 0 {
+		chg = math.Round((last-data[0].Ref)*100) / 100
+		chgPct = math.Round(chg/data[0].Ref*10000) / 100
+	}
+	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": map[string]interface{}{
+		"points": data,
+		"stats": map[string]interface{}{
+			"min": minP, "max": maxP, "avg": avg, "last": last,
+			"count": len(data), "change": chg, "changePct": chgPct,
+		},
+	}})
+}
+
+// handleHWMovers 涨跌榜：窗口内首末轮次价格变化，按幅度排序
+func handleHWMovers(db *sql.DB, w http.ResponseWriter, r *http.Request) {
+	cat := normCat(strings.TrimSpace(r.URL.Query().Get("cat")))
+	win := strings.TrimSpace(r.URL.Query().Get("window"))
+	limit := 20
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
+			limit = n
+		}
+	}
+	var cutoff int64
+	switch win {
+	case "1d":
+		cutoff = time.Now().Unix() - 86400
+	case "7d":
+		cutoff = time.Now().Unix() - 7*86400
+	case "30d":
+		cutoff = time.Now().Unix() - 30*86400
+	}
+	q := `SELECT ts, cat_label, brand, model, spec, platform, shop, price FROM jd_rounds
+	      WHERE price IS NOT NULL AND price>0`
+	args := []any{}
+	if cutoff > 0 {
+		q += ` AND ts >= ?`
+		args = append(args, cutoff)
+	}
+	q += ` ORDER BY ts ASC`
+	rows, err := db.Query(q, args...)
+	if err != nil {
+		writeJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+	type meta struct{ cat, brand, model, spec, plat, shop string }
+	first := map[string]float64{}
+	last := map[string]float64{}
+	metaOf := map[string]meta{}
+	for rows.Next() {
+		var ts sql.NullInt64
+		var cl, bm, md, sp, pl, sh sql.NullString
+		var pr sql.NullFloat64
+		if err := rows.Scan(&ts, &cl, &bm, &md, &sp, &pl, &sh, &pr); err != nil || !pr.Valid {
+			continue
+		}
+		k := hwStableKey(cl.String, bm.String, md.String, sp.String)
+		if _, ok := first[k]; !ok {
+			first[k] = pr.Float64
+			metaOf[k] = meta{normCat(cl.String), strings.TrimSpace(bm.String), strings.TrimSpace(md.String), specKey(cl.String, md.String, sp.String), pl.String, sh.String}
+		}
+		last[k] = pr.Float64
+	}
+
+	out := []hwItem{}
+	for k, f := range first {
+		l := last[k]
+		if f <= 0 || l <= 0 {
+			continue
+		}
+		mo := metaOf[k]
+		if cat != "" && mo.cat != cat {
+			continue
+		}
+		pct := math.Round((l-f)/f*10000) / 100
+		if !hwPlausible(pct) || pct == 0 {
+			continue
+		}
+		it := hwItem{
+			Key: k, Cat: mo.cat, CatLabel: mo.cat,
+			Brand: mo.brand, Model: mo.model, Spec: mo.spec, Keyword: mo.model,
+			Platform: mo.plat, Shop: mo.shop,
+			Price: l, PrevPrice: f, PriceStatus: "ok",
+			ChangePct: pct, HasChange: true,
+			Trends: []float64{f, l},
+		}
+		if pct > 0 {
+			it.Trend = "up"
+		} else if pct < 0 {
+			it.Trend = "down"
+		} else {
+			it.Trend = "flat"
+		}
+		out = append(out, it)
+	}
+	// 轮次间没有可比数据时，退回 jd_latest 的 prev_price（采集端自带的上一价）
+	if len(out) == 0 {
+		out = hwMoversFromPrev(db, cat)
+	}
+	if len(out) == 0 {
+		writeJSON(w, 200, map[string]interface{}{"code": 0, "data": map[string]interface{}{
+			"count": 0, "movers": []hwItem{}, "empty": true,
+		}})
+		return
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return math.Abs(out[i].ChangePct) > math.Abs(out[j].ChangePct)
+	})
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": map[string]interface{}{"count": len(out), "movers": out}})
+}
+
+// hwMaxSwing 单轮涨跌幅合理上限（%）。超过即判定为脏数据（如历史上把「多型号打包
+// 链接」的券前价当成上一价，会出现 -50% 这种假暴跌），一律不展示。
+// 原则：宁可无价，不可错价。
+const hwMaxSwing = 40.0
+
+func hwPlausible(pct float64) bool { return math.Abs(pct) <= hwMaxSwing }
+
+// hwMoversFromPrev 以 jd_latest 自带的 prev_price 作为上一价，生成涨跌条目。
+// 采集端只在确认到价格变化时才写 prev_price，因此这一路数据更"干净"但更稀疏。
+func hwMoversFromPrev(db *sql.DB, cat string) []hwItem {
+	rows, err := db.Query(
+		`SELECT cat_label, brand, model, spec, platform, shop, price, prev_price, ts
+		 FROM jd_latest WHERE price>0 AND prev_price>0`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	out := []hwItem{}
+	for rows.Next() {
+		var cl, bm, md, sp, pl, sh sql.NullString
+		var pr, pv sql.NullFloat64
+		var ts sql.NullInt64
+		if err := rows.Scan(&cl, &bm, &md, &sp, &pl, &sh, &pr, &pv, &ts); err != nil || !pr.Valid || !pv.Valid {
+			continue
+		}
+		nc := normCat(cl.String)
+		if cat != "" && nc != cat {
+			continue
+		}
+		pct := math.Round((pr.Float64-pv.Float64)/pv.Float64*10000) / 100
+		if !hwPlausible(pct) {
+			continue
+		}
+		if pct == 0 {
+			continue
+		}
+		it := hwItem{
+			Key: hwStableKey(cl.String, bm.String, md.String, sp.String),
+			Cat: nc, CatLabel: nc,
+			Brand: strings.TrimSpace(bm.String), Model: strings.TrimSpace(md.String),
+			Spec: strings.TrimSpace(sp.String), Keyword: strings.TrimSpace(md.String),
+			Platform: pl.String, Shop: sh.String, PriceStatus: "ok",
+			Price: pr.Float64, PrevPrice: pv.Float64,
+			ChangePct: pct, HasChange: true,
+			UpdatedAt: ts.Int64 * 1000,
+			Trends:    []float64{pv.Float64, pr.Float64},
+		}
+		if pct > 0 {
+			it.Trend = "up"
+		} else if pct < 0 {
+			it.Trend = "down"
+		} else {
+			it.Trend = "flat"
+		}
+		out = append(out, it)
+	}
+	return out
+}
+
+func nullFloat(n sql.NullFloat64) any {	if n.Valid {
+		return n.Float64
+	}
+	return nil
+}
+func atoi64(s string) int64 {
+	i, _ := parseInt(s)
+	return i
+}
+func parseInt(s string) (int64, error) {
+	var n int64
+	_, err := fmt.Sscanf(s, "%d", &n)
+	return n, err
+}
+
+// ===== 社区 API handlers =====
+
+func handleCommunityFeed(db *sql.DB, w http.ResponseWriter, r *http.Request) {
+	before, _ := parseInt(r.URL.Query().Get("before"))
+	posts, err := cListPosts(db, before, 30)
+	if err != nil {
+		writeJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": posts})
+}
+
+func handleCommunityCreatePost(db *sql.DB, w http.ResponseWriter, r *http.Request) {
+	var p CPost
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		writeJSON(w, 400, map[string]string{"error": "请求体解析失败: " + err.Error()})
+		return
+	}
+	p.Type = strings.TrimSpace(p.Type)
+	if p.Type == "" {
+		p.Type = "text"
+	}
+	if strings.TrimSpace(p.Author) == "" {
+		p.Author = "匿名"
+	}
+	p.Body = strings.TrimSpace(p.Body)
+	p.Title = strings.TrimSpace(p.Title)
+	if p.Body == "" && p.Title == "" && p.URL == "" && len(p.Images) == 0 {
+		writeJSON(w, 400, map[string]string{"error": "内容不能为空"})
+		return
+	}
+	for _, t := range cExtractTags(p.Body + " " + p.Title) {
+		p.Tags = cAppendUnique(p.Tags, t)
+	}
+	p.CreatedAt = time.Now().UnixMilli()
+	saved, err := cCreatePost(db, p)
+	if err != nil {
+		writeJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+	hub.broadcastJSON(map[string]interface{}{"type": "new_post", "post": saved})
+	writeJSON(w, 201, map[string]interface{}{"code": 0, "data": saved})
+}
+
+func handleCommunityPost(db *sql.DB, w http.ResponseWriter, r *http.Request, id int64) {
+	switch {
+	case r.Method == http.MethodGet:
+		p, err := cGetPost(db, id)
+		if err != nil {
+			writeJSON(w, 404, map[string]string{"error": "帖子不存在"})
+			return
+		}
+		comments, _ := cListComments(db, id)
+		writeJSON(w, 200, map[string]interface{}{"code": 0, "data": p, "comments": comments})
+	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/comments"):
+		var c CComment
+		if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+			writeJSON(w, 400, map[string]string{"error": "请求体解析失败"})
+			return
+		}
+		if strings.TrimSpace(c.Author) == "" {
+			c.Author = "匿名"
+		}
+		c.Body = strings.TrimSpace(c.Body)
+		if c.Body == "" {
+			writeJSON(w, 400, map[string]string{"error": "评论不能为空"})
+			return
+		}
+		c.CreatedAt = time.Now().UnixMilli()
+		saved, err := cAddComment(db, id, c)
+		if err != nil {
+			writeJSON(w, 500, map[string]string{"error": err.Error()})
+			return
+		}
+		hub.broadcastJSON(map[string]interface{}{"type": "new_comment", "postId": id, "comment": saved})
+		writeJSON(w, 201, map[string]interface{}{"code": 0, "data": saved})
+	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/like"):
+		n, err := cLikePost(db, id)
+		if err != nil {
+			writeJSON(w, 500, map[string]string{"error": err.Error()})
+			return
+		}
+		hub.broadcastJSON(map[string]interface{}{"type": "like", "postId": id, "likes": n})
+		writeJSON(w, 200, map[string]interface{}{"code": 0, "data": n})
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func handleArticleParse(w http.ResponseWriter, r *http.Request) {
+	u := r.URL.Query().Get("url")
+	if u == "" && r.Method == http.MethodPost {
+		var b struct {
+			URL string `json:"url"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&b)
+		u = b.URL
+	}
+	u = strings.TrimSpace(u)
+	if u == "" {
+		writeJSON(w, 400, map[string]string{"error": "缺少 url 参数"})
+		return
+	}
+	art, err := cParseArticle(u)
+	if err != nil {
+		writeJSON(w, 502, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": art})
+}
+
+// ===== 工具 =====
+
+func writeJSON(w http.ResponseWriter, code int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func cExtractTags(s string) []string {
+	var tags []string
+	for _, tk := range strings.Fields(s) {
+		if strings.HasPrefix(tk, "#") && len([]rune(tk)) > 1 {
+			tags = append(tags, strings.TrimPrefix(tk, "#"))
+		}
+	}
+	return tags
+}
+
+func cAppendUnique(s []string, v string) []string {
+	for _, x := range s {
+		if x == v {
+			return s
+		}
+	}
+	return append(s, v)
+}
+
+// ===== WebSocket 实时 =====
+
+var upgraderC = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+
+type cClient struct {
+	conn *websocket.Conn
+	send chan []byte
+}
+
+type cHub struct {
+	clients    map[*cClient]bool
+	register   chan *cClient
+	unregister chan *cClient
+	broadcast  chan []byte
+}
+
+var hub = &cHub{
+	clients:    make(map[*cClient]bool),
+	register:   make(chan *cClient),
+	unregister: make(chan *cClient),
+	broadcast:  make(chan []byte, 256),
+}
+
+func (h *cHub) run() {
+	for {
+		select {
+		case c := <-h.register:
+			h.clients[c] = true
+		case c := <-h.unregister:
+			if _, ok := h.clients[c]; ok {
+				delete(h.clients, c)
+				close(c.send)
+			}
+		case m := <-h.broadcast:
+			for c := range h.clients {
+				select {
+				case c.send <- m:
+				default:
+					close(c.send)
+					delete(h.clients, c)
+				}
+			}
+		}
+	}
+}
+
+func (h *cHub) broadcastJSON(v interface{}) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return
+	}
+	select {
+	case h.broadcast <- b:
+	default:
+	}
+}
+
+func (c *cClient) readPump() {
+	defer func() {
+		hub.unregister <- c
+		c.conn.Close()
+	}()
+	for {
+		if _, _, err := c.conn.ReadMessage(); err != nil {
+			break
+		}
+	}
+}
+
+func (c *cClient) writePump() {
+	defer c.conn.Close()
+	for m := range c.send {
+		if err := c.conn.WriteMessage(websocket.TextMessage, m); err != nil {
+			return
+		}
+	}
+}
+
+func serveWsCommunity(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgraderC.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	c := &cClient{conn: conn, send: make(chan []byte, 16)}
+	hub.register <- c
+	go c.writePump()
+	go c.readPump()
+}
+
+// ===== 公众号图文解析 =====
+
+func cHttpGetUA(rawURL string) (*http.Response, error) {
+	client := &http.Client{Timeout: 25 * time.Second}
+	req, err := http.NewRequest("GET", rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9")
+	req.Header.Set("Referer", "https://mp.weixin.qq.com/")
+	return client.Do(req)
+}
+
+func cMetaContent(doc *goquery.Document, name string) string {
+	v := doc.Find("meta[property='" + name + "']").AttrOr("content", "")
+	if v == "" {
+		v = doc.Find("meta[name='" + name + "']").AttrOr("content", "")
+	}
+	return strings.TrimSpace(v)
+}
+
+func cAbsURL(src, base string) string {
+	if src == "" {
+		return ""
+	}
+	if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
+		return src
+	}
+	b, err := url.Parse(base)
+	if err != nil {
+		return src
+	}
+	ref, err := url.Parse(src)
+	if err != nil {
+		return src
+	}
+	return b.ResolveReference(ref).String()
+}
+
+func cParseArticle(rawURL string) (*CArticle, error) {
+	resp, err := cHttpGetUA(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("远端返回 %d", resp.StatusCode)
+	}
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	a := &CArticle{URL: rawURL}
+	a.Title = cMetaContent(doc, "og:title")
+	if a.Title == "" {
+		a.Title = strings.TrimSpace(doc.Find("#activity-name").Text())
+	}
+	if a.Title == "" {
+		a.Title = strings.TrimSpace(doc.Find("title").Text())
+	}
+	a.Author = cMetaContent(doc, "og:article:author")
+	if a.Author == "" {
+		a.Author = strings.TrimSpace(doc.Find("#js_name").Text())
+	}
+	a.Cover = cAbsURL(cMetaContent(doc, "og:image"), rawURL)
+
+	content := doc.Find("#js_content")
+	if content.Length() == 0 {
+		content = doc.Find("article")
+	}
+	if content.Length() == 0 {
+		content = doc.Find(".rich_media_content")
+	}
+	if content.Length() == 0 {
+		content = doc.Find("body")
+	}
+	var imgs []string
+	content.Find("img").Each(func(i int, s *goquery.Selection) {
+		src, _ := s.Attr("data-src")
+		if src == "" {
+			src, _ = s.Attr("src")
+		}
+		src = strings.TrimSpace(src)
+		if src != "" && !strings.HasPrefix(src, "data:") {
+			imgs = append(imgs, cAbsURL(src, rawURL))
+		}
+	})
+	a.Images = imgs
+	content.Find("script,style").Remove()
+	html, _ := content.Html()
+	a.Content = strings.TrimSpace(html)
+	text := strings.TrimSpace(content.Text())
+	if len([]rune(text)) > 120 {
+		text = string([]rune(text)[:120]) + "…"
+	}
+	a.Summary = text
+	if a.Title == "" && a.Content == "" {
+		return nil, fmt.Errorf("未能解析出任何内容，可能不是图文链接或已被反爬拦截")
+	}
+	return a, nil
+}
+
+// ===== 图片上传（供原生 App 发图帖）=====
+
+func handleCommunityUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 20<<20)
+	if err := r.ParseMultipartForm(20 << 20); err != nil {
+		writeJSON(w, 400, map[string]string{"error": "解析失败: " + err.Error()})
+		return
+	}
+	files := r.MultipartForm.File["file"]
+	if len(files) == 0 {
+		writeJSON(w, 400, map[string]string{"error": "没有文件"})
+		return
+	}
+	dir := communityDir + "/uploads"
+	_ = os.MkdirAll(dir, 0o755)
+	allowed := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true}
+	var urls []string
+	for _, fh := range files {
+		ext := strings.ToLower(filepath.Ext(fh.Filename))
+		if !allowed[ext] {
+			continue
+		}
+		src, err := fh.Open()
+		if err != nil {
+			continue
+		}
+		name := fmt.Sprintf("%d_%s%s", time.Now().UnixNano(), randStr(6), ext)
+		dst, err := os.Create(dir + "/" + name)
+		if err != nil {
+			src.Close()
+			continue
+		}
+		_, _ = io.Copy(dst, src)
+		src.Close()
+		dst.Close()
+		urls = append(urls, "/community/uploads/"+name)
+	}
+	if len(urls) == 0 {
+		writeJSON(w, 400, map[string]string{"error": "无效图片（仅支持 jpg/png/gif/webp）"})
+		return
+	}
+	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": map[string]interface{}{"urls": urls}})
+}
+
+func randStr(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
+
+// ===== 安卓 App 下载页 =====
+
+const appDownloadPage = `<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>早八社区 · 安卓 App</title>
+<style>
+  body{margin:0;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#0d1117;color:#e6edf3;display:flex;min-height:100vh;align-items:center;justify-content:center}
+  .card{background:#161b22;border:1px solid #30363d;border-radius:16px;padding:32px 28px;max-width:420px;width:90%;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+  h1{margin:0 0 4px;font-size:22px}
+  .sub{color:#8b949e;font-size:13px;margin-bottom:20px}
+  .btn{display:inline-block;background:#238636;color:#fff;text-decoration:none;padding:13px 22px;border-radius:10px;font-weight:600;font-size:15px}
+  .btn:active{background:#2ea043}
+  .meta{margin-top:16px;color:#8b949e;font-size:12px;line-height:1.7}
+  .tip{margin-top:14px;background:#1c2128;border:1px solid #30363d;border-radius:10px;padding:12px;font-size:12px;color:#c9d1d9;text-align:left}
+</style></head>
+<body><div class="card">
+  <h1>早八社区</h1>
+  <div class="sub">硬件行情 · 图文社区 · 实时互动</div>
+  <a class="btn" href="/downloads/__APK__">⬇ 下载安卓 App（APK）</a>
+  <div class="meta">版本 __VER__ · 原生应用 · 支持 Android 8.0+</div>
+  <div class="tip">安装提示：安卓默认禁止「未知来源」安装。下载后点击 APK，按提示允许「允许来自此来源的应用」即可安装。</div>
+</div></body></html>`
+
+// latestAPK 取 downloads 目录里最新的 APK（按修改时间），避免每次发版改代码。
+func latestAPK() (name, version string) {
+	dir := "site/downloads"
+	if communityDir != "" {
+		dir = filepath.Join(filepath.Dir(communityDir), "downloads")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", ""
+	}
+	var best os.FileInfo
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(strings.ToLower(e.Name()), ".apk") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if best == nil || info.ModTime().After(best.ModTime()) {
+			best = info
+			name = e.Name()
+		}
+	}
+	if name != "" {
+		version = name
+		version = strings.TrimSuffix(version, ".apk")
+		if i := strings.LastIndex(version, "v"); i >= 0 {
+			version = version[i+1:]
+		}
+	}
+	return name, version
+}
+
+func handleAppDownloadPage(w http.ResponseWriter, r *http.Request) {
+	name, ver := latestAPK()
+	if name == "" {
+		name = "zaoba-community-native-v1.2.0.apk"
+		ver = "1.2.0"
+	}
+	html := strings.Replace(appDownloadPage, "__APK__", name, 1)
+	html = strings.Replace(html, "__VER__", ver, 1)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(html))
+}

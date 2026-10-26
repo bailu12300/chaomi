@@ -1,0 +1,117 @@
+:root{
+  --bg:#0d1117; --bg2:#161b22; --bg3:#1c2230; --line:#30363d;
+  --txt:#e6edf3; --mut:#8b949e; --acc:#58a6ff; --up:#f0524a; --down:#3fb950;
+  --chip:#21262d; --gold:#e3b341;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--txt);
+  font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-text-size-adjust:100%;
+}
+.topbar{
+  position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:14px;
+  padding:10px 16px; background:rgba(13,17,23,.85); backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);
+}
+.brand{display:flex; align-items:baseline; gap:8px; min-width:0}
+.logo{font-weight:800; font-size:20px; letter-spacing:1px; color:#fff;
+  background:linear-gradient(90deg,var(--acc),var(--gold)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+.tag{color:var(--mut); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.tabs{display:flex; gap:6px; margin-left:auto}
+.tab{background:var(--chip); color:var(--txt); border:1px solid var(--line); border-radius:999px;
+  padding:7px 14px; cursor:pointer; font-size:14px}
+.tab.active{background:var(--acc); border-color:var(--acc); color:#04101f; font-weight:700}
+.post-btn{background:var(--gold); color:#1a1205; border-color:var(--gold); font-weight:700}
+.me{display:flex; align-items:center; gap:8px}
+#nick{width:96px; background:var(--bg2); border:1px solid var(--line); color:var(--txt);
+  border-radius:8px; padding:7px 10px; font-size:13px}
+.dot{width:9px; height:9px; border-radius:50%; background:var(--mut); display:inline-block}
+.dot.on{background:var(--down)} .dot.off{background:#6b2020}
+
+main{max-width:760px; margin:0 auto; padding:16px}
+.view{display:none} .view.active{display:block}
+
+.card{background:var(--bg2); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:14px}
+.card .head{display:flex; align-items:center; gap:10px; margin-bottom:8px}
+.avatar{width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,var(--acc),#a371f7);
+  display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; flex:0 0 auto}
+.name{font-weight:700} .time{color:var(--mut); font-size:12px}
+.badge{font-size:11px; padding:2px 8px; border-radius:999px; background:var(--chip); color:var(--mut); border:1px solid var(--line)}
+.body{white-space:pre-wrap; word-break:break-word; margin:4px 0}
+.imgs{display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; margin-top:8px}
+.imgs img{width:100%; height:160px; object-fit:cover; border-radius:10px; border:1px solid var(--line); cursor:pointer}
+.cover{width:100%; max-height:260px; object-fit:cover; border-radius:10px; margin-top:8px; border:1px solid var(--line)}
+.linkcard{display:block; margin-top:8px; padding:10px 12px; border:1px solid var(--line); border-radius:10px;
+  background:var(--bg3); color:var(--txt); text-decoration:none}
+.linkcard .lt{font-weight:700} .linkcard .lu{color:var(--acc); font-size:12px; word-break:break-all}
+.article-body{margin-top:8px; font-size:14px; line-height:1.8}
+.article-body img{max-width:100%; border-radius:8px; margin:6px 0}
+.article-body p{margin:6px 0}
+.actions{display:flex; gap:16px; margin-top:10px; color:var(--mut); font-size:13px}
+.actions button{background:none; border:none; color:inherit; cursor:pointer; font-size:13px; display:flex; align-items:center; gap:5px}
+.actions .liked{color:var(--up)}
+.tags{margin-top:8px; display:flex; flex-wrap:wrap; gap:6px}
+.tagc{font-size:12px; color:var(--acc); background:rgba(88,166,255,.12); padding:2px 8px; border-radius:999px}
+
+.empty,.loading{color:var(--mut); text-align:center; padding:40px 0}
+.market-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px}
+.mcard{background:var(--bg2); border:1px solid var(--line); border-radius:12px; padding:12px; cursor:pointer; transition:border-color .15s}
+.mcard:hover{border-color:var(--acc)}
+.mcard .mname{font-weight:700} .mcard .mspec{color:var(--mut); font-size:12px}
+.mcard .mprice{font-size:20px; font-weight:800; margin-top:6px}
+.mcard .mchg{font-size:13px; font-weight:700; margin-left:6px}
+.market-tools{display:flex; flex-direction:column; gap:8px; margin-bottom:14px}
+#hwSearch{background:var(--bg2); border:1px solid var(--line); color:var(--txt);
+  border-radius:10px; padding:11px 14px; font-size:14px; width:100%}
+#hwSearch:focus{outline:none; border-color:var(--acc)}
+.chips{display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{background:var(--bg2); border:1px solid var(--line); color:var(--mut);
+  border-radius:999px; padding:7px 14px; font-size:13px; white-space:nowrap; cursor:pointer}
+.chip.active{background:var(--acc); border-color:var(--acc); color:#04101f; font-weight:700}
+.sorts{display:flex; gap:6px}
+.st{flex:1; background:transparent; border:1px solid var(--line); color:var(--mut);
+  border-radius:8px; padding:7px 0; font-size:12px; cursor:pointer}
+.st.active{color:var(--acc); border-color:var(--acc); background:rgba(88,166,255,.1)}
+.mhint{color:var(--mut); font-size:11px}
+.spark{width:100%; height:170px; display:block}
+.mdl-stats{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:12px; text-align:center}
+.mdl-stats b{display:block; font-size:15px}
+.mdl-stats span{color:var(--mut); font-size:11px}
+.up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--mut)}
+.mcard .meta{color:var(--mut); font-size:11px; margin-top:4px}
+
+.sheet{position:fixed; inset:0; z-index:50; display:flex; align-items:flex-end; justify-content:center}
+.sheet-mask{position:absolute; inset:0; background:rgba(0,0,0,.55)}
+.sheet-body{position:relative; width:100%; max-width:680px; background:var(--bg2); border:1px solid var(--line);
+  border-radius:18px 18px 0 0; padding:16px; max-height:92vh; overflow:auto; animation:up .2s ease}
+.sheet-body.wide{max-width:760px}
+@keyframes up{from{transform:translateY(20px);opacity:.6}to{transform:none;opacity:1}}
+.sheet-head{display:flex; justify-content:space-between; align-items:center; font-weight:700; margin-bottom:12px}
+.x{background:none; border:none; color:var(--mut); font-size:18px; cursor:pointer}
+.type-tabs{display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap}
+.tt{background:var(--chip); border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:7px 12px; cursor:pointer}
+.tt.active{background:var(--acc); color:#04101f; border-color:var(--acc); font-weight:700}
+.pane{display:flex; flex-direction:column; gap:8px; margin-bottom:12px}
+.pane.hidden,.sheet.hidden,.view.hidden,.hidden{display:none}
+input,textarea{width:100%; background:var(--bg); border:1px solid var(--line); color:var(--txt);
+  border-radius:10px; padding:10px; font:inherit; resize:vertical}
+.article-importer{display:flex; gap:8px}
+.article-importer input{flex:1}
+button.primary{background:var(--gold); color:#1a1205; border:none; border-radius:10px; padding:10px 18px; font-weight:800; cursor:pointer}
+.sheet-foot{display:flex; justify-content:space-between; align-items:center; margin-top:6px}
+.hint{color:var(--mut); font-size:13px}
+.article-preview{border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--bg)}
+.article-preview img.cover{max-height:200px; width:100%; object-fit:cover; border-radius:8px}
+.article-preview .ap-content{max-height:240px; overflow:auto; font-size:13px; line-height:1.7; margin-top:8px}
+.article-preview .ap-content img{max-width:100%}
+.cmt{border-top:1px solid var(--line); margin-top:10px; padding-top:8px}
+.cmt .c{display:flex; gap:8px; padding:6px 0; font-size:14px}
+.cmt .c .cn{font-weight:700; flex:0 0 auto}
+.cmt-form{display:flex; gap:8px; margin-top:8px}
+.cmt-form input{flex:1}
+.toast{position:fixed; left:50%; bottom:30px; transform:translateX(-50%); background:var(--bg3);
+  border:1px solid var(--line); color:var(--txt); padding:10px 18px; border-radius:999px; z-index:90; font-size:14px}
+@media (min-width:760px){ .sheet{align-items:center} .sheet-body{border-radius:18px} }

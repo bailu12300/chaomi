@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">早八社区</string>
+    <string name="tab_feed">信息流</string>
+    <string name="tab_market">行情</string>
+    <string name="hint_nickname">昵称（默认匿名）</string>
+    <string name="hint_title">标题（可选）</string>
+    <string name="hint_body">说点什么…</string>
+    <string name="hint_link">链接地址 https://…</string>
+    <string name="hint_article">公众号文章链接 https://mp.weixin.qq.com/…</string>
+    <string name="publish">发布</string>
+    <string name="parse">解析</string>
+    <string name="pick_image">选择图片</string>
+    <string name="send">发送</string>
+    <string name="comment_hint">写评论…</string>
+    <string name="like">赞</string>
+    <string name="loading">加载中…</string>
+    <string name="empty_feed">还没有内容，点右下角 + 发第一条吧</string>
+</resources>

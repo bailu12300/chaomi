@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@color/zaoba_surface">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="发布"
+        android:textColor="@color/zaoba_text"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="12dp" />
+
+    <com.google.android.material.chip.ChipGroup
+        android:id="@+id/typeGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/typeText"
+            style="@style/Widget.MaterialComponents.Chip.Choice"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checkable="true"
+            android:checked="true"
+            android:text="文字"
+            android:textColor="@color/zaoba_text" />
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/typeLink"
+            style="@style/Widget.MaterialComponents.Chip.Choice"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checkable="true"
+            android:text="链接"
+            android:textColor="@color/zaoba_text" />
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/typeImage"
+            style="@style/Widget.MaterialComponents.Chip.Choice"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checkable="true"
+            android:text="图片"
+            android:textColor="@color/zaoba_text" />
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/typeArticle"
+            style="@style/Widget.MaterialComponents.Chip.Choice"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checkable="true"
+            android:text="公众号"
+            android:textColor="@color/zaoba_text" />
+    </com.google.android.material.chip.ChipGroup>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:hint="@string/hint_title"
+        app:hintTextColor="@color/zaoba_text_dim"
+        app:boxStrokeColor="@color/zaoba_border">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/titleEt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/zaoba_text" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- 文字内容 -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/bodyBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:hint="@string/hint_body"
+        app:hintTextColor="@color/zaoba_text_dim"
+        app:boxStrokeColor="@color/zaoba_border">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/bodyEt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minLines="3"
+            android:gravity="top"
+            android:textColor="@color/zaoba_text" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- 链接地址 -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/linkBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:visibility="gone"
+        android:hint="@string/hint_link"
+        app:hintTextColor="@color/zaoba_text_dim"
+        app:boxStrokeColor="@color/zaoba_border">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/linkEt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textUri"
+            android:textColor="@color/zaoba_text" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- 公众号文章链接 + 解析 -->
+    <LinearLayout
+        android:id="@+id/articleBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="@string/hint_article"
+            app:hintTextColor="@color/zaoba_text_dim"
+            app:boxStrokeColor="@color/zaoba_border">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/articleEt"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textUri"
+                android:textColor="@color/zaoba_text" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/parseBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/parse"
+            android:textColor="#ffffff" />
+    </LinearLayout>
+
+    <!-- 图片选择 -->
+    <LinearLayout
+        android:id="@+id/imageBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/pickBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/pick_image"
+            android:textColor="#ffffff" />
+
+        <LinearLayout
+            android:id="@+id/imagesRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp" />
+    </LinearLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:hint="@string/hint_nickname"
+        app:hintTextColor="@color/zaoba_text_dim"
+        app:boxStrokeColor="@color/zaoba_border">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/nickEt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/zaoba_text" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/publishBtn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:text="@string/publish"
+        android:textColor="#ffffff" />
+</LinearLayout>

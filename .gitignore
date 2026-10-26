@@ -16,3 +16,24 @@ keystore.properties
 
 # 系统
 Thumbs.db
+
+# 运行期配置与凭据（严禁提交）
+db.conf
+*.env
+.env
+cm01.env
+_archive/
+_SECRETS.md
+
+# 构建产物
+mobile/build/
+moble/.gradle/
+*.apk
+*.idsig
+bin/
+*.exe
+*.db
+*.log
+
+# 采集 App 临时
+.kotlin/
