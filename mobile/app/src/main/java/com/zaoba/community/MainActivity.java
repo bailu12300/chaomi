@@ -222,7 +222,6 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
             for (HwCat c : cats) {
                 if (c == null || c.cat == null) continue;
                 catRow.addView(makeChip(c.cat + " " + c.count, c.cat, false));
-                hwTotal += c.count;
             }
         }
     }

@@ -27,7 +27,7 @@ _SECRETS.md
 
 # 构建产物
 mobile/build/
-moble/.gradle/
+mobile/.gradle/
 *.apk
 *.idsig
 bin/
