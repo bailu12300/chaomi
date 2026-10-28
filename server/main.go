@@ -3060,7 +3060,40 @@ func doServe() error {
 		// 行情已移除：不再启动 GPU 采集
 		log.Printf("[serve] GPU 采集已停用（行情模块移除）")
 	}
+
+	// ---- RSS 资讯（一级菜单 + 二级分类，服务端定时拉取并预翻译）----
+	if err := ensureRSSSchema(db); err != nil {
+		log.Printf("[serve] rss schema: %v", err)
+	} else {
+		startRSSLoop(db)
+		go backfillTranslate(db)
+		log.Printf("[serve] RSS 拉取已启动（5 个分类，每 15 分钟一轮）")
+	}
+
 	go hub.run()
+	// ---- 天气（Open-Meteo，国外免费无需 key）----
+	mux.HandleFunc("/api/weather", func(w http.ResponseWriter, r *http.Request) { handleWeather(db, w, r) })
+
+	// ---- RSS 资讯 ----
+	mux.HandleFunc("/api/rss/cats", func(w http.ResponseWriter, r *http.Request) { handleRSSCats(db, w, r) })
+	mux.HandleFunc("/api/rss/items", func(w http.ResponseWriter, r *http.Request) { handleRSSItems(db, w, r) })
+	mux.HandleFunc("/api/rss/refresh", func(w http.ResponseWriter, r *http.Request) {
+		// 手动触发一次拉取（前端下拉强刷用，5 分钟内只允许一次）
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		if !tryLockRSSManual() {
+			writeJSON(w, 429, map[string]string{"error": "刷新太频繁，请稍后再试"})
+			return
+		}
+		go func() {
+			n, seen := refreshRSS(db)
+			log.Printf("[rss] 手动刷新：新增 %d（抓取 %d）", n, seen)
+		}()
+		writeJSON(w, 200, map[string]interface{}{"code": 0, "data": "已开始刷新"})
+	})
+
 	mux.HandleFunc("/api/community/feed", func(w http.ResponseWriter, r *http.Request) { handleCommunityFeed(db, w, r) })
 	mux.HandleFunc("/api/community/posts", func(w http.ResponseWriter, r *http.Request) { handleCommunityCreatePost(db, w, r) })
 	mux.HandleFunc("/api/community/post/", func(w http.ResponseWriter, r *http.Request) {

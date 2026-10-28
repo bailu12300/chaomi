@@ -143,7 +143,176 @@
     const v = t.dataset.view;
     $$(".view").forEach((x) => x.classList.remove("active"));
     $("#" + v).classList.add("active");
+    if (v === "rss") loadRSS(true);
   }));
+
+  // ========== 天气卡片 ==========
+  // 定位优先级：浏览器定位 > 上次选的城市 > 服务端按 IP 定位
+  const WX_KEY = "chaomi_wx_city";
+
+  function loadWeather() {
+    const saved = localStorage.getItem(WX_KEY) || "";
+    const done = (query) => {
+      api("/api/weather" + query).then((j) => {
+        if (j && j.data) paintWeather(j.data);
+      }).catch(() => {
+        $(".wxtext").textContent = "天气获取失败";
+      });
+    };
+
+    if (saved) { done("?city=" + encodeURIComponent(saved)); return; }
+
+    // 尝试浏览器定位（需用户授权），失败则退回服务端 IP 定位
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => done(`?lat=${pos.coords.latitude.toFixed(4)}&lon=${pos.coords.longitude.toFixed(4)}`),
+        () => done(""),
+        { timeout: 6000, maximumAge: 10 * 60 * 1000 }
+      );
+    } else {
+      done("");
+    }
+  }
+
+  function paintWeather(d) {
+    const box = $("#weatherCard");
+    if (!box) return;
+    box.dataset.city = d.city || "";
+    $(".wxcity", box).textContent = d.city
+      ? (d.region && d.region !== d.city ? `${d.city} · ${d.region}` : d.city)
+      : "当前位置";
+    const n = d.now || {};
+    $(".wxicon", box).textContent = n.icon || "🌡️";
+    $(".wxtemp b", box).textContent = n.tempC == null ? "--" : Math.round(n.tempC);
+    $(".wxtext", box).textContent = n.text || "";
+    $(".wxsub", box).textContent =
+      `体感 ${Math.round(n.feelsC == null ? 0 : n.feelsC)}° · 湿度 ${n.humidity || 0}% · 风 ${Math.round(n.windKph || 0)}km/h`;
+
+    const days = (d.days || []).slice(0, 5);
+    $("#wxDays", box).innerHTML = days.map((x, i) => {
+      const label = i === 0 ? "今天" : weekdayOf(x.date);
+      return `<div class="wxday">
+        <span class="wxd">${label}</span>
+        <span class="wxdi">${x.icon || ""}</span>
+        <span class="wxdt">${Math.round(x.maxC)}°<i>/${Math.round(x.minC)}°</i></span>
+      </div>`;
+    }).join("");
+  }
+
+  function weekdayOf(dateStr) {
+    const d = new Date(dateStr + "T00:00:00");
+    if (isNaN(d.getTime())) return "";
+    return ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][d.getDay()];
+  }
+
+  function bindWeatherSwitch() {
+    const btn = $("#wxSwitch");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      const cur = localStorage.getItem(WX_KEY) || "";
+      const v = prompt("输入城市名（留空则用自动定位）", cur);
+      if (v === null) return;
+      const city = v.trim();
+      if (city) localStorage.setItem(WX_KEY, city);
+      else localStorage.removeItem(WX_KEY);
+      loadWeather();
+    });
+  }
+
+  // ========== 资讯（RSS） ==========
+  const rssState = { cat: "", before: 0, loading: false, hasMore: true, seen: new Set() };
+
+  async function loadRSSCats() {
+    try {
+      const j = await api("/api/rss/cats");
+      const cats = (j.data && j.data.cats) || [];
+      const box = $("#rssCats");
+      box.innerHTML = [`<div class="chip active" data-cat="">全部</div>`]
+        .concat(cats.map((c) =>
+          `<div class="chip" data-cat="${esc(c.key)}">${esc(c.name)}<i>${c.count || 0}</i></div>`))
+        .join("");
+      $$(".chip", box).forEach((el) => el.addEventListener("click", () => {
+        $$(".chip", box).forEach((x) => x.classList.remove("active"));
+        el.classList.add("active");
+        rssState.cat = el.dataset.cat || "";
+        loadRSS(true);
+      }));
+    } catch (e) { /* 分类拉取失败不阻断列表 */ }
+  }
+
+  async function loadRSS(reset) {
+    if (rssState.loading) return;
+    if (reset) {
+      rssState.before = 0;
+      rssState.hasMore = true;
+      rssState.seen = new Set();
+      $("#rssList").innerHTML = "";
+    }
+    if (!rssState.hasMore) return;
+
+    rssState.loading = true;
+    $("#rssLoading").classList.remove("hidden");
+    try {
+      let u = "/api/rss/items?limit=12";
+      if (rssState.cat) u += "&cat=" + encodeURIComponent(rssState.cat);
+      if (rssState.before) u += "&before=" + rssState.before;
+      const j = await api(u);
+      const d = j.data || {};
+      const list = d.list || [];
+      rssState.before = d.nextBefore || 0;
+      rssState.hasMore = !!d.hasMore && list.length > 0;
+
+      const box = $("#rssList");
+      let added = 0;
+      for (const it of list) {
+        if (rssState.seen.has(it.id)) continue;
+        rssState.seen.add(it.id);
+        box.insertAdjacentHTML("beforeend", rssCard(it));
+        added++;
+      }
+      $("#rssEmpty").style.display = box.children.length ? "none" : "block";
+      $("#rssMore").style.display = rssState.hasMore ? "block" : "none";
+      if (added === 0 && rssState.hasMore) { rssState.loading = false; loadRSS(false); return; }
+    } catch (e) {
+      $("#rssEmpty").style.display = "block";
+      $("#rssEmpty").textContent = "资讯加载失败：" + (e.message || "网络错误");
+    } finally {
+      rssState.loading = false;
+      $("#rssLoading").classList.add("hidden");
+    }
+  }
+
+  function rssCard(it) {
+    // 有译文优先显示译文，原文作为副标题（离线也能读）
+    const title = it.titleZh || it.title || "";
+    const showOrig = it.titleZh && it.title && it.titleZh !== it.title;
+    const sum = it.summaryZh || it.summary || "";
+    const img = it.image
+      ? `<div class="rssimg"><img src="${esc(it.image)}" loading="lazy" alt=""></div>` : "";
+    return `<article class="rsscard" data-link="${esc(it.link)}">
+      ${img}
+      <div class="rssbody">
+        <h3>${esc(title)}</h3>
+        ${showOrig ? `<div class="rssorig">${esc(it.title)}</div>` : ""}
+        ${sum ? `<p>${esc(sum.slice(0, 160))}</p>` : ""}
+        <div class="rssmeta">
+          <span class="rsssrc">${esc(it.source || "")}</span>
+          <span>${esc(timeAgo(it.pubAt))}</span>
+        </div>
+      </div>
+    </article>`;
+  }
+
+  function bindRSSActions() {
+    $("#rssMore").addEventListener("click", () => loadRSS(false));
+    // 点卡片用系统浏览器打开原文（服务端已抓过，这里给的是原站链接）
+    $("#rssList").addEventListener("click", (e) => {
+      const card = e.target.closest(".rsscard");
+      if (!card) return;
+      const link = card.dataset.link;
+      if (link) window.open(link, "_blank", "noopener");
+    });
+  }
 
   // ---------- 信息流 ----------
   const cards = new Map(); // id -> element
@@ -624,8 +793,12 @@
 
   // ---------- 启动 ----------
   paintAccount();
+  loadWeather();
+  bindWeatherSwitch();
   loadFeed();
   loadTags();
+  loadRSSCats();
+  bindRSSActions();
   startHeartbeat();
   connectWS();
 

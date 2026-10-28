@@ -16,6 +16,7 @@
     </div>
     <nav class="tabs">
       <button class="tab active" data-view="feed">信息流</button>
+      <button class="tab" data-view="rss">资讯</button>
       <button class="tab post-btn" id="openComposer">＋ 发布</button>
     </nav>
     <div class="me">
@@ -28,6 +29,23 @@
   </header>
 
   <main>
+    <!-- ===== 天气卡片（自动按定位/IP 取当前城市）===== -->
+    <section id="weatherCard" class="wxcard" data-city="">
+      <div class="wxhead">
+        <span class="wxcity">定位中…</span>
+        <button class="wxswitch" id="wxSwitch" title="切换城市">切换</button>
+      </div>
+      <div class="wxmain">
+        <span class="wxicon">—</span>
+        <div class="wxtemp"><b>--</b><i>°</i></div>
+        <div class="wxdesc">
+          <span class="wxtext">加载中</span>
+          <span class="wxsub"></span>
+        </div>
+      </div>
+      <div id="wxDays" class="wxdays"></div>
+    </section>
+
     <section id="feed" class="view active">
       <div class="feedbar">
         <div class="sorts">
@@ -41,6 +59,21 @@
       <div id="postList"></div>
       <div id="feedEmpty" class="empty">还没有内容，点「＋ 发布」发第一条吧。</div>
       <div id="feedLoading" class="loading">加载中…</div>
+    </section>
+
+    <!-- ===== 资讯（RSS）：一级菜单，二级为分类 ===== -->
+    <section id="rss" class="view">
+      <div class="rssbar">
+        <div id="rssCats" class="chips">
+          <div class="chip active" data-cat="">全部</div>
+        </div>
+      </div>
+      <div id="rssList" class="rsslist"></div>
+      <div id="rssEmpty" class="empty">还没有资讯，点下方「刷新」拉取</div>
+      <div id="rssLoading" class="loading hidden">加载中…</div>
+      <div class="rssfoot">
+        <button id="rssMore" class="rssmore">加载更多</button>
+      </div>
     </section>
 
   </main>
