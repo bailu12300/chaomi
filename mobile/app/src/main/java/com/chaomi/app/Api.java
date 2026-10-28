@@ -298,6 +298,91 @@ public class Api {
         return gson.fromJson(gson.toJson(root.get("data")), Article.class);
     }
 
+    // ---------- RSS 资讯（服务端拉取 + 预翻译） ----------
+
+    public static class RssPage {
+        public List<RssItem> list = new ArrayList<>();
+        public long nextBefore = 0;
+        public boolean hasMore = false;
+    }
+
+    /** 二级分类（含每类条数） */
+    public static List<RssCat> rssCats() throws Exception {
+        String json = get(BASE + "/api/rss/cats");
+        Map<String, Object> root = gson.fromJson(json, Map.class);
+        if (root == null) throw new Exception("空响应");
+        if (err(root) != null) throw new Exception(err(root));
+        Object d = root.get("data");
+        if (!(d instanceof Map)) return new ArrayList<>();
+        Object cats = ((Map<String, Object>) d).get("cats");
+        if (cats == null) return new ArrayList<>();
+        List<RssCat> out = gson.fromJson(gson.toJson(cats),
+                new TypeToken<List<RssCat>>() {}.getType());
+        return out == null ? new ArrayList<>() : out;
+    }
+
+    /** 资讯列表：cat 为空表示全部；before=上一页最后一条的 pubAt（首页传 0） */
+    public static RssPage rssItems(String cat, long before, int limit) throws Exception {
+        StringBuilder u = new StringBuilder(BASE + "/api/rss/items?limit=" + limit);
+        if (cat != null && !cat.isEmpty()) {
+            u.append("&cat=").append(URLEncoder.encode(cat, "UTF-8"));
+        }
+        if (before > 0) u.append("&before=").append(before);
+
+        String json = get(u.toString());
+        Map<String, Object> root = gson.fromJson(json, Map.class);
+        if (root == null) throw new Exception("空响应");
+        if (err(root) != null) throw new Exception(err(root));
+
+        RssPage page = new RssPage();
+        Object d = root.get("data");
+        if (!(d instanceof Map)) return page;
+        Map<String, Object> dm = (Map<String, Object>) d;
+        Object list = dm.get("list");
+        if (list != null) {
+            List<RssItem> parsed = gson.fromJson(gson.toJson(list),
+                    new TypeToken<List<RssItem>>() {}.getType());
+            if (parsed != null) page.list = parsed;
+        }
+        page.nextBefore = numL(dm.get("nextBefore"));
+        Object hm = dm.get("hasMore");
+        page.hasMore = hm instanceof Boolean && (Boolean) hm;
+        return page;
+    }
+
+    // ---------- 天气（Open-Meteo） ----------
+
+    /** 按坐标取天气；lat/lon 传 0 则服务端按请求 IP 定位 */
+    public static WeatherCard weather(double lat, double lon) throws Exception {
+        String u = BASE + "/api/weather";
+        if (lat != 0 || lon != 0) {
+            u += "?lat=" + lat + "&lon=" + lon;
+        }
+        String json = get(u);
+        Map<String, Object> root = gson.fromJson(json, Map.class);
+        if (root == null) throw new Exception("空响应");
+        if (err(root) != null) throw new Exception(err(root));
+        Object d = root.get("data");
+        if (d == null) throw new Exception("天气数据为空");
+        return gson.fromJson(gson.toJson(d), WeatherCard.class);
+    }
+
+    /** 按城市名取天气 */
+    public static WeatherCard weatherByCity(String city) throws Exception {
+        String u = BASE + "/api/weather?city=" + URLEncoder.encode(city, "UTF-8");
+        String json = get(u);
+        Map<String, Object> root = gson.fromJson(json, Map.class);
+        if (root == null) throw new Exception("空响应");
+        if (err(root) != null) throw new Exception(err(root));
+        Object d = root.get("data");
+        if (d == null) throw new Exception("天气数据为空");
+        return gson.fromJson(gson.toJson(d), WeatherCard.class);
+    }
+
+    private static long numL(Object o) {
+        return o instanceof Number ? ((Number) o).longValue() : 0L;
+    }
+
     // 行情接口已随行情模块移除（/api/gpu/* 服务端已下线）
 
     // ---------- 节点监控 ----------

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="8dp"
+    android:background="@color/chaomi_surface"
+    android:orientation="horizontal"
+    android:padding="12dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?android:attr/selectableItemBackground">
+
+    <ImageView
+        android:id="@+id/rssImg"
+        android:layout_width="92dp"
+        android:layout_height="68dp"
+        android:layout_marginEnd="12dp"
+        android:background="@color/chaomi_surface_2"
+        android:scaleType="centerCrop"
+        android:contentDescription="@string/loading"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/rssTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:lineSpacingExtra="2dp"
+            android:textColor="@color/chaomi_text"
+            android:textSize="14.5sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/rssOrig"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/chaomi_text_dim"
+            android:textSize="11.5sp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/rssSummary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:lineSpacingExtra="2dp"
+            android:textColor="@color/chaomi_text_dim"
+            android:textSize="12.5sp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/rssMeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:textColor="@color/chaomi_accent"
+            android:textSize="11sp" />
+    </LinearLayout>
+</LinearLayout>

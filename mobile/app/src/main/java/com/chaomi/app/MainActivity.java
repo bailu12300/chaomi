@@ -2,9 +2,14 @@ package com.chaomi.app;
 
 import androidx.core.content.ContextCompat;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.location.Location;
+import android.location.LocationManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -28,32 +33,54 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 主界面：只保留图文社区信息流。
+ * 主界面：天气卡片 + 一级菜单（信息流 / 资讯）+ 社区信息流 + RSS 资讯。
  *
- * 行情（硬件/显卡价格）模块已整体移除 —— 数据源不稳定且与社区定位无关，
- * 服务端对应的 /api/hw/* 与 /api/gpu/* 路由也已下线。
+ * 资讯数据全部由服务器拉取、解析、翻译后存库，App 只读 API：
+ *   · 断网也能看已缓存的中文译文
+ *   · 不直连任何第三方 RSS 源，省流量也避免被墙
  */
 public class MainActivity extends AppCompatActivity implements Realtime.Listener {
 
     private static final int REQ_AUTH = 8100;
+    private static final int REQ_LOC = 8200;
 
+    // 一级菜单
+    private MaterialButton tabFeed, tabRss, btnAccount;
+    private View feedPane, rssPane;
+    private FloatingActionButton fab;
+
+    // 信息流
     private RecyclerView feedView;
     private SwipeRefreshLayout swipe;
-    private MaterialButton btnAccount;
     private MaterialButton fLatest, fHot, fMine, fSearch, feedSearchGo;
-    private FloatingActionButton fab;
-    private View feedPane, feedSearchBox;
+    private View feedSearchBox;
     private EditText feedSearch;
     private LinearLayout tagRow;
-
     private final List<Post> feedList = new ArrayList<>();
     private FeedAdapter feedAdapter;
-
-    // 信息流状态
-    private String feedSort = "";     // "" | hot
+    private String feedSort = "";
     private boolean feedMine = false;
     private String feedQuery = "";
     private String feedTag = "";
+
+    // 资讯
+    private RecyclerView rssView;
+    private SwipeRefreshLayout rssSwipe;
+    private LinearLayout rssCatRow;
+    private MaterialButton rssMore;
+    private final List<RssItem> rssList = new ArrayList<>();
+    private RssAdapter rssAdapter;
+    private String rssCat = "";
+    private long rssBefore = 0;
+    private boolean rssHasMore = true;
+    private boolean rssLoading = false;
+    private boolean rssLoadedOnce = false;
+    private final java.util.Set<Long> rssSeen = new java.util.HashSet<>();
+
+    // 天气
+    private LinearLayout wxCard, wxDays;
+    private TextView wxCity, wxIcon, wxTemp, wxText, wxSub, wxSwitch;
+    private String wxCityOverride = "";
 
     private Realtime realtime;
     private EditorSheet activeSheet;
@@ -65,11 +92,39 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         Ui.fit(this);
         Session.restore(this);
 
-        feedView = findViewById(R.id.feed);
-        swipe = findViewById(R.id.swipe);
+        bindViews();
+        wireActions();
+
+        paintAccount();
+        loadFeed();
+        loadTags();
+        initWeather();
+        loadRssCats();
+        showTab(true);
+
+        startKeepAlive();
+        syncAdRules();
+
+        realtime = new Realtime(this);
+        Api.bg(() -> {
+            try {
+                realtime.connect();
+            } catch (Exception e) {
+                runOnUiThread(() -> toast("实时通道连接失败"));
+            }
+        });
+    }
+
+    private void bindViews() {
+        tabFeed = findViewById(R.id.tabFeed);
+        tabRss = findViewById(R.id.tabRss);
         btnAccount = findViewById(R.id.btnAccount);
         fab = findViewById(R.id.fab);
         feedPane = findViewById(R.id.feedPane);
+        rssPane = findViewById(R.id.rssPane);
+
+        feedView = findViewById(R.id.feed);
+        swipe = findViewById(R.id.swipe);
         tagRow = findViewById(R.id.tagRow);
         fLatest = findViewById(R.id.fLatest);
         fHot = findViewById(R.id.fHot);
@@ -79,14 +134,38 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         feedSearch = findViewById(R.id.feedSearch);
         feedSearchGo = findViewById(R.id.feedSearchGo);
 
+        rssView = findViewById(R.id.rssList);
+        rssSwipe = findViewById(R.id.rssSwipe);
+        rssCatRow = findViewById(R.id.rssCatRow);
+        rssMore = findViewById(R.id.rssMore);
+
+        wxCard = findViewById(R.id.wxCard);
+        wxDays = findViewById(R.id.wxDays);
+        wxCity = findViewById(R.id.wxCity);
+        wxIcon = findViewById(R.id.wxIcon);
+        wxTemp = findViewById(R.id.wxTemp);
+        wxText = findViewById(R.id.wxText);
+        wxSub = findViewById(R.id.wxSub);
+        wxSwitch = findViewById(R.id.wxSwitch);
+
         feedView.setLayoutManager(new LinearLayoutManager(this));
         feedAdapter = new FeedAdapter(feedList, this::openDetail, this::like);
         feedView.setAdapter(feedAdapter);
 
-        swipe.setOnRefreshListener(this::loadFeed);
+        rssView.setLayoutManager(new LinearLayoutManager(this));
+        rssAdapter = new RssAdapter(rssList, this::openRss);
+        rssView.setAdapter(rssAdapter);
+    }
 
+    private void wireActions() {
+        swipe.setOnRefreshListener(this::loadFeed);
+        rssSwipe.setOnRefreshListener(() -> loadRss(true));
+
+        tabFeed.setOnClickListener(v -> showTab(true));
+        tabRss.setOnClickListener(v -> showTab(false));
         fab.setOnClickListener(v -> openComposer());
         btnAccount.setOnClickListener(v -> onAccountClick());
+
         findViewById(R.id.btnAdSkip).setOnClickListener(v ->
                 startActivity(new Intent(this, AdSkipActivity.class)));
         findViewById(R.id.btnNode).setOnClickListener(v ->
@@ -111,21 +190,337 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
             return false;
         });
 
-        paintAccount();
-        loadFeed();
-        loadTags();
+        rssMore.setOnClickListener(v -> loadRss(false));
+        wxSwitch.setOnClickListener(v -> pickWeatherCity());
+    }
 
-        startKeepAlive();
-        syncAdRules();
+    // ---------- 一级菜单切换 ----------
 
-        realtime = new Realtime(this);
+    private void showTab(boolean feed) {
+        feedPane.setVisibility(feed ? View.VISIBLE : View.GONE);
+        rssPane.setVisibility(feed ? View.GONE : View.VISIBLE);
+        fab.setVisibility(feed ? View.VISIBLE : View.GONE);
+
+        tabFeed.setTextColor(ContextCompat.getColor(this,
+                feed ? R.color.chaomi_accent : R.color.chaomi_text_dim));
+        tabRss.setTextColor(ContextCompat.getColor(this,
+                feed ? R.color.chaomi_text_dim : R.color.chaomi_accent));
+
+        if (!feed && !rssLoadedOnce) {
+            loadRss(true);
+        }
+    }
+
+    // ========== 天气 ==========
+
+    /** 定位优先级：用户手选城市 > 系统定位 > 服务端按 IP 定位 */
+    private void initWeather() {
+        wxCityOverride = prefs().getString("wx_city", "");
+        if (wxCityOverride != null && !wxCityOverride.isEmpty()) {
+            loadWeatherByCity(wxCityOverride);
+            return;
+        }
+        if (hasLocationPermission()) {
+            loadWeatherByLocation();
+        } else {
+            // 先按 IP 出结果，不阻塞用户，同时请求定位权限
+            loadWeatherByIp();
+            requestLocationPermission();
+        }
+    }
+
+    private android.content.SharedPreferences prefs() {
+        return getSharedPreferences("chaomi", MODE_PRIVATE);
+    }
+
+    private boolean hasLocationPermission() {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestLocationPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= 23 && !hasLocationPermission()) {
+            requestPermissions(new String[]{
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+            }, REQ_LOC);
+        }
+    }
+
+    private void loadWeatherByLocation() {
+        try {
+            LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
+            if (lm == null) { loadWeatherByIp(); return; }
+
+            Location best = null;
+            for (String p : new String[]{LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER}) {
+                try {
+                    if (!lm.isProviderEnabled(p)) continue;
+                    Location l = lm.getLastKnownLocation(p);
+                    if (l != null && (best == null || l.getTime() > best.getTime())) best = l;
+                } catch (SecurityException ignored) {
+                }
+            }
+            if (best == null) { loadWeatherByIp(); return; }
+
+            final double lat = best.getLatitude();
+            final double lon = best.getLongitude();
+            Api.bg(() -> {
+                try {
+                    WeatherCard c = Api.weather(lat, lon);
+                    runOnUiThread(() -> paintWeather(c));
+                } catch (Exception e) {
+                    loadWeatherByIp();
+                }
+            });
+        } catch (Exception e) {
+            loadWeatherByIp();
+        }
+    }
+
+    private void loadWeatherByIp() {
         Api.bg(() -> {
             try {
-                realtime.connect();
+                WeatherCard c = Api.weather(0, 0);
+                runOnUiThread(() -> paintWeather(c));
             } catch (Exception e) {
-                runOnUiThread(() -> toast("实时通道连接失败"));
+                runOnUiThread(() -> {
+                    if (wxText != null) wxText.setText("天气不可用");
+                });
             }
         });
+    }
+
+    private void loadWeatherByCity(String city) {
+        Api.bg(() -> {
+            try {
+                WeatherCard c = Api.weatherByCity(city);
+                runOnUiThread(() -> paintWeather(c));
+            } catch (Exception e) {
+                runOnUiThread(() -> toast("天气获取失败：" + e.getMessage()));
+            }
+        });
+    }
+
+    private void paintWeather(WeatherCard c) {
+        if (c == null || c.now == null) return;
+        String city = c.city == null ? "" : c.city;
+        String region = c.region == null ? "" : c.region;
+        wxCity.setText(city.isEmpty() ? "当前位置"
+                : (region.isEmpty() || region.equals(city) ? city : city + " · " + region));
+        wxIcon.setText(c.now.icon == null ? "🌡️" : c.now.icon);
+        wxTemp.setText(String.valueOf(Math.round(c.now.tempC)));
+        wxText.setText(c.now.text == null ? "" : c.now.text);
+        wxSub.setText(String.format(java.util.Locale.CHINA,
+                "体感 %d° · 湿度 %d%% · 风 %dkm/h",
+                Math.round(c.now.feelsC), c.now.humidity, Math.round(c.now.windKph)));
+
+        wxDays.removeAllViews();
+        if (c.days == null) return;
+        int n = Math.min(c.days.size(), 5);
+        for (int i = 0; i < n; i++) {
+            WeatherDay d = c.days.get(i);
+            LinearLayout cell = new LinearLayout(this);
+            cell.setOrientation(LinearLayout.VERTICAL);
+            cell.setGravity(Gravity.CENTER);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setCornerRadius(dp(10));
+            bg.setColor(0x14FFFFFF);
+            cell.setBackground(bg);
+            int pad = dp(8);
+            cell.setPadding(pad, dp(6), pad, dp(6));
+
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            lp.setMarginEnd(dp(6));
+            cell.setLayoutParams(lp);
+
+            TextView label = smallText(i == 0 ? "今天" : weekdayOf(d.date), 11, 0xFFB9D2F0);
+            TextView icon = smallText(d.icon == null ? "" : d.icon, 16, 0xFFFFFFFF);
+            TextView temp = smallText(Math.round(d.maxC) + "°/" + Math.round(d.minC) + "°", 12, 0xFFFFFFFF);
+
+            cell.addView(label);
+            cell.addView(icon);
+            cell.addView(temp);
+            wxDays.addView(cell);
+        }
+    }
+
+    private TextView smallText(String s, int sp, int color) {
+        TextView tv = new TextView(this);
+        tv.setText(s);
+        tv.setTextSize(sp);
+        tv.setTextColor(color);
+        tv.setGravity(Gravity.CENTER);
+        return tv;
+    }
+
+    private String weekdayOf(String date) {
+        try {
+            java.text.SimpleDateFormat in = new java.text.SimpleDateFormat("yyyy-MM-dd",
+                    java.util.Locale.CHINA);
+            java.util.Date d = in.parse(date);
+            String[] names = {"周日", "周一", "周二", "周三", "周四", "周五", "周六"};
+            java.util.Calendar cal = java.util.Calendar.getInstance();
+            cal.setTime(d);
+            return names[cal.get(java.util.Calendar.DAY_OF_WEEK) - 1];
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private void pickWeatherCity() {
+        EditText et = new EditText(this);
+        et.setHint("城市名，如 北京 / 上海");
+        et.setSingleLine(true);
+        et.setText(wxCityOverride == null ? "" : wxCityOverride);
+        int pad = dp(14);
+        et.setPadding(pad, pad, pad, pad);
+
+        new AlertDialog.Builder(this)
+                .setTitle("设置天气城市")
+                .setMessage("留空则使用自动定位。")
+                .setView(et)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确定", (d, w) -> {
+                    String city = et.getText().toString().trim();
+                    wxCityOverride = city;
+                    prefs().edit().putString("wx_city", city).apply();
+                    if (city.isEmpty()) {
+                        loadWeatherByLocation();
+                    } else {
+                        loadWeatherByCity(city);
+                    }
+                })
+                .show();
+    }
+
+    private int dp(int v) {
+        return (int) (v * getResources().getDisplayMetrics().density);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == REQ_LOC) {
+            boolean granted = false;
+            for (int r : results) if (r == PackageManager.PERMISSION_GRANTED) granted = true;
+            if (granted) loadWeatherByLocation();
+            // 拒绝就继续用 IP 定位的结果，不打扰用户
+        }
+    }
+
+    // ========== 资讯（RSS） ==========
+
+    private void loadRssCats() {
+        Api.bg(() -> {
+            try {
+                List<RssCat> cats = Api.rssCats();
+                runOnUiThread(() -> {
+                    rssCatRow.removeAllViews();
+                    rssCatRow.addView(makeRssChip("全部", "", true));
+                    for (RssCat c : cats) {
+                        rssCatRow.addView(makeRssChip(c.name + " " + c.count, c.key, false));
+                    }
+                });
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
+    private TextView makeRssChip(String label, String key, boolean active) {
+        TextView tv = new TextView(this);
+        tv.setText(label);
+        tv.setTextSize(11);
+        tv.setGravity(Gravity.CENTER);
+        tv.setPadding(dp(11), dp(5), dp(11), dp(5));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMarginEnd(dp(6));
+        tv.setLayoutParams(lp);
+        paintRssChip(tv, active);
+        tv.setTag(key);
+        tv.setOnClickListener(v -> {
+            rssCat = String.valueOf(v.getTag() == null ? "" : v.getTag());
+            for (int i = 0; i < rssCatRow.getChildCount(); i++) {
+                View c = rssCatRow.getChildAt(i);
+                paintRssChip((TextView) c, c == v);
+            }
+            loadRss(true);
+        });
+        return tv;
+    }
+
+    private void paintRssChip(TextView tv, boolean on) {
+        GradientDrawable g = new GradientDrawable();
+        g.setCornerRadius(dp(22));
+        g.setColor(on ? ContextCompat.getColor(this, R.color.chaomi_accent_2)
+                : ContextCompat.getColor(this, R.color.chaomi_surface_2));
+        g.setStroke(1, on ? ContextCompat.getColor(this, R.color.chaomi_accent)
+                : ContextCompat.getColor(this, R.color.chaomi_border));
+        tv.setBackground(g);
+        tv.setTextColor(on ? Color.WHITE : ContextCompat.getColor(this, R.color.chaomi_text_dim));
+    }
+
+    private void loadRss(boolean reset) {
+        if (rssLoading) return;
+        if (reset) {
+            rssBefore = 0;
+            rssHasMore = true;
+            rssSeen.clear();
+        }
+        if (!rssHasMore && !reset) return;
+
+        rssLoading = true;
+        if (reset) rssSwipe.setRefreshing(true);
+
+        final String cat = rssCat;
+        final long before = rssBefore;
+
+        Api.bg(() -> {
+            try {
+                Api.RssPage page = Api.rssItems(cat, before, 12);
+                runOnUiThread(() -> {
+                    rssLoading = false;
+                    rssSwipe.setRefreshing(false);
+                    rssLoadedOnce = true;
+                    rssBefore = page.nextBefore;
+                    rssHasMore = page.hasMore && !page.list.isEmpty();
+
+                    if (reset) {
+                        rssList.clear();
+                        rssSeen.clear();
+                    }
+                    int added = 0;
+                    for (RssItem it : page.list) {
+                        if (rssSeen.contains(it.id)) continue;
+                        rssSeen.add(it.id);
+                        rssList.add(it);
+                        added++;
+                    }
+                    rssAdapter.notifyDataSetChanged();
+                    rssMore.setVisibility(rssHasMore ? View.VISIBLE : View.GONE);
+                    if (added == 0 && rssList.isEmpty()) {
+                        toast("暂无资讯");
+                    }
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    rssLoading = false;
+                    rssSwipe.setRefreshing(false);
+                    toast("资讯加载失败：" + e.getMessage());
+                });
+            }
+        });
+    }
+
+    private void openRss(RssItem it) {
+        if (it == null || it.link == null || it.link.isEmpty()) return;
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(it.link)));
+        } catch (Exception e) {
+            toast("没有可用浏览器");
+        }
     }
 
     // ---------- 账号 ----------
@@ -138,10 +533,6 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         startActivity(new Intent(this, ProfileActivity.class));
     }
 
-    /**
-     * 后台静默同步一次在线去广告规则。
-     * 失败不要紧 —— 内置规则和本地关键词都在本机，断网仍能正常跳过广告。
-     */
     private void syncAdRules() {
         Api.bg(() -> {
             try {
@@ -236,7 +627,6 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         });
     }
 
-    /** 热门标签行 */
     private void loadTags() {
         Api.bg(() -> {
             try {
@@ -360,14 +750,14 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
     public void onStatus(String s) {
     }
 
-    /** 启动常驻守护 + 申请通知权限（前台服务需要通知才不会被折起来） */
+    /** 启动常驻守护 + 申请通知权限 */
     private void startKeepAlive() {
         KeepAliveService.start(this);
         KeepAliveReceiver.schedule(this);
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             try {
                 if (checkSelfPermission("android.permission.POST_NOTIFICATIONS")
-                        != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        != PackageManager.PERMISSION_GRANTED) {
                     requestPermissions(
                             new String[]{"android.permission.POST_NOTIFICATIONS"}, 9101);
                 }

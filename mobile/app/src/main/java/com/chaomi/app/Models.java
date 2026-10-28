@@ -160,3 +160,75 @@ class HwHistory {
     long prevAt;
     boolean hasPrev;
 }
+
+/** RSS 资讯条目（服务端已拉取并翻译） */
+class RssItem {
+    long id;
+    String category;
+    String title;
+    String titleZh;     // 中文译文（离线可用）
+    String link;
+    String summary;
+    String summaryZh;
+    String source;
+    String image;
+    String lang;
+    long pubAt;
+    long fetchedAt;
+
+    /** 展示用标题：优先译文 */
+    String displayTitle() {
+        return (titleZh != null && !titleZh.isEmpty()) ? titleZh : (title == null ? "" : title);
+    }
+
+    String displaySummary() {
+        return (summaryZh != null && !summaryZh.isEmpty()) ? summaryZh : (summary == null ? "" : summary);
+    }
+}
+
+/** RSS 分类（一级菜单下的二级分类） */
+class RssCat {
+    String key;
+    String name;
+    int count;
+}
+
+/** 天气当前实况 */
+class WeatherNow {
+    double tempC;
+    double feelsC;
+    int humidity;
+    double windKph;
+    int windDir;
+    int code;
+    String text;
+    String icon;
+    boolean isDay;
+    double precipMm;
+    double pressure;
+    double uvIndex;
+}
+
+/** 某一天的预报 */
+class WeatherDay {
+    String date;
+    double maxC;
+    double minC;
+    int code;
+    String text;
+    String icon;
+    double precipMm;
+    int precipProb;
+}
+
+/** 天气卡片整体数据 */
+class WeatherCard {
+    String city;
+    String region;
+    double lat;
+    double lon;
+    WeatherNow now;
+    List<WeatherDay> days;
+    long updatedAt;
+    String source;
+}
