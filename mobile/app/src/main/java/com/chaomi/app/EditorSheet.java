@@ -42,6 +42,8 @@ public class EditorSheet extends BottomSheetDialog {
     public interface OnPublished { void onPublished(Post p); }
 
     public static final int REQ_PICK = 7101;
+    /** 拍照（系统相机）*/
+    public static final int REQ_CAMERA = 7102;
 
     /** 编辑中的块 */
     static class EditBlock {
@@ -66,6 +68,8 @@ public class EditorSheet extends BottomSheetDialog {
     private TextView articleMeta, hint, wordCount;
 
     private EditBlock pendingImageBlock;   // 正在选图的块
+    private android.net.Uri cameraUri;     // 拍照输出位置
+    private java.io.File cameraFile;
     private EditBlock focusedBlock;        // 当前聚焦块（行内格式作用对象）
     private String articleUrl = "";        // 公众号原文链接
     private String articleCover = "";      // 原文封面
@@ -99,6 +103,7 @@ public class EditorSheet extends BottomSheetDialog {
         v.findViewById(R.id.addQuote).setOnClickListener(x -> addBlock("quote"));
         v.findViewById(R.id.addCode).setOnClickListener(x -> addBlock("code"));
         v.findViewById(R.id.addImage).setOnClickListener(x -> pickMediaFor(null));
+        v.findViewById(R.id.addCamera).setOnClickListener(x -> takePhoto(null));
         v.findViewById(R.id.addVideo).setOnClickListener(x -> addVideoBlock());
         v.findViewById(R.id.addHr).setOnClickListener(x -> addBlock("hr"));
         v.findViewById(R.id.addTopic).setOnClickListener(x -> addBlock("topic"));
@@ -219,7 +224,7 @@ public class EditorSheet extends BottomSheetDialog {
                     } else if (b.src != null && !b.src.isEmpty()) {
                         Picasso.get().load(Utils.fullUrl(b.src)).into(img);
                     }
-                    img.setOnClickListener(x -> pickMediaFor(fbImg));
+                    img.setOnClickListener(x -> chooseImageSource(fbImg));
                     break;
                 case "video":
                     text.setVisibility(View.GONE);
@@ -415,8 +420,146 @@ public class EditorSheet extends BottomSheetDialog {
         activity.startActivityForResult(i, REQ_PICK);
     }
 
+    /** 选择图片来源：拍照 / 相册 */
+    private void chooseImageSource(EditBlock target) {
+        String[] items = {"拍照", "从相册选择"};
+        new androidx.appcompat.app.AlertDialog.Builder(activity)
+                .setTitle("插入图片")
+                .setItems(items, (d, which) -> {
+                    if (which == 0) takePhoto(target);
+                    else pickMediaFor(target);
+                })
+                .show();
+    }
+
+    /** 拍照临时目录（与 res/xml/file_paths.xml 的 path 必须一致） */
+    private java.io.File cameraDir() {
+        java.io.File dir = new java.io.File(activity.getExternalFilesDir(null), "chaomi_photos");
+        if (!dir.exists()) dir.mkdirs();
+        return dir;
+    }
+
+    /**
+     * 调起系统相机拍照。
+     *
+     * 关键点（踩过坑的地方）：
+     *   1. 必须用 FileProvider 生成 content:// URI，直接传 file:// 在 targetSdk 24+
+     *      会抛 FileUriExposedException，表现为「点了没反应」
+     *   2. 必须同时授予相机 App 写权限（FLAG_GRANT_WRITE_URI_PERMISSION），
+     *      否则相机能打开但保存失败，拍完拿回来是 0 字节
+     *   3. 拍照是异步的，结果在 onPickResult 里按 REQ_CAMERA 分支处理
+     */
+    private void takePhoto(EditBlock target) {
+        pendingImageBlock = target;
+        try {
+            java.io.File f = new java.io.File(cameraDir(),
+                    "shot_" + System.currentTimeMillis() + ".jpg");
+            cameraFile = f;
+
+            android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                    activity, "com.chaomi.app.fileprovider", f);
+            cameraUri = uri;
+
+            android.content.Intent i = new android.content.Intent(
+                    android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+            i.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri);
+            i.addFlags(android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    | android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            // 没有相机的设备给出提示而不是崩溃
+            if (i.resolveActivity(activity.getPackageManager()) == null) {
+                toast("没有找到相机应用");
+                return;
+            }
+            activity.startActivityForResult(i, REQ_CAMERA);
+        } catch (Exception e) {
+            toast("打开相机失败：" + e.getMessage());
+        }
+    }
+
+    /** 读取拍照结果 */
+    private void handleCameraResult(int resultCode) {
+        java.io.File f = cameraFile;
+        cameraFile = null;
+        cameraUri = null;
+
+        if (f == null || !f.exists()) {
+            toast("没有拍到照片");
+            return;
+        }
+        // 用户取消：删掉空文件，避免占空间
+        if (resultCode != Activity.RESULT_OK) {
+            if (f.length() == 0) f.delete();
+            return;
+        }
+        if (f.length() == 0) {
+            f.delete();
+            toast("照片保存失败，请重试");
+            return;
+        }
+        // 拍照都是大图，先压到 1600px 内再上传，省流量也避免服务端拒收
+        byte[] bytes = compressPhoto(f);
+        f.delete();
+
+        if (bytes == null) {
+            toast("读取照片失败");
+            return;
+        }
+        if (bytes.length > 8 * 1024 * 1024) {
+            toast("照片过大（限 8MB）");
+            return;
+        }
+
+        if (pendingImageBlock != null) {
+            pendingImageBlock.bytes = bytes;
+            pendingImageBlock.type = "img";
+        } else {
+            EditBlock b = new EditBlock();
+            b.type = "img";
+            b.bytes = bytes;
+            blocks.add(b);
+        }
+        pendingImageBlock = null;
+        renderBlocks();
+        updateWordCount();
+        toast("已插入照片");
+    }
+
+    /** 压缩到最长边 1600px、JPEG 88 质量 */
+    private byte[] compressPhoto(java.io.File f) {
+        try {
+            android.graphics.BitmapFactory.Options opt = new android.graphics.BitmapFactory.Options();
+            opt.inJustDecodeBounds = true;
+            android.graphics.BitmapFactory.decodeFile(f.getAbsolutePath(), opt);
+            int w = opt.outWidth, h = opt.outHeight;
+            if (w <= 0 || h <= 0) return null;
+
+            int sample = 1;
+            int maxSide = Math.max(w, h);
+            while (maxSide / sample > 1600) sample *= 2;
+
+            android.graphics.BitmapFactory.Options o2 = new android.graphics.BitmapFactory.Options();
+            o2.inSampleSize = sample;
+            android.graphics.Bitmap bm =
+                    android.graphics.BitmapFactory.decodeFile(f.getAbsolutePath(), o2);
+            if (bm == null) return null;
+
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            bm.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, bos);
+            bm.recycle();
+            return bos.toByteArray();
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     /** 由 Activity.onActivityResult 转发 */
     public void onPickResult(int resultCode, Intent data) {
+        // 拍照结果走单独分支（data 可能为 null，照片在 cameraFile 里）
+        if (cameraFile != null) {
+            handleCameraResult(resultCode);
+            return;
+        }
         if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) return;
         byte[] bytes = readUri(data.getData());
         if (bytes == null) {

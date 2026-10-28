@@ -159,7 +159,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
 
     private void wireActions() {
         swipe.setOnRefreshListener(this::loadFeed);
-        rssSwipe.setOnRefreshListener(() -> loadRss(true));
+        rssSwipe.setOnRefreshListener(this::refreshRssAndReload);
 
         tabFeed.setOnClickListener(v -> showTab(true));
         tabRss.setOnClickListener(v -> showTab(false));
@@ -192,6 +192,12 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
 
         rssMore.setOnClickListener(v -> loadRss(false));
         wxSwitch.setOnClickListener(v -> pickWeatherCity());
+        wxCard.setOnClickListener(v -> {
+            // 天气不可用时点卡片直接重试
+            if ("天气不可用".contentEquals(wxCity.getText())) {
+                initWeather();
+            }
+        });
     }
 
     // ---------- 一级菜单切换 ----------
@@ -206,100 +212,40 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         tabRss.setTextColor(ContextCompat.getColor(this,
                 feed ? R.color.chaomi_text_dim : R.color.chaomi_accent));
 
-        if (!feed && !rssLoadedOnce) {
-            loadRss(true);
+        if (!feed) {
+            loadRssCats();
+            if (!rssLoadedOnce) {
+                loadRss(true);
+            }
         }
     }
 
     // ========== 天气 ==========
 
-    /** 定位优先级：用户手选城市 > 系统定位 > 服务端按 IP 定位 */
+    private WeatherLoader weatherLoader;
+
+    /**
+     * 天气加载：交给 WeatherLoader 处理（三路并行 + 5 秒兜底）。
+     * 这里只负责把结果画到卡片上，不做任何定位/网络判断。
+     */
     private void initWeather() {
-        wxCityOverride = prefs().getString("wx_city", "");
-        if (wxCityOverride != null && !wxCityOverride.isEmpty()) {
-            loadWeatherByCity(wxCityOverride);
-            return;
-        }
-        if (hasLocationPermission()) {
-            loadWeatherByLocation();
-        } else {
-            // 先按 IP 出结果，不阻塞用户，同时请求定位权限
-            loadWeatherByIp();
-            requestLocationPermission();
-        }
-    }
+        wxCity.setText("定位中…");
+        wxText.setText("正在获取天气");
 
-    private android.content.SharedPreferences prefs() {
-        return getSharedPreferences("chaomi", MODE_PRIVATE);
-    }
-
-    private boolean hasLocationPermission() {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED;
-    }
-
-    private void requestLocationPermission() {
-        if (android.os.Build.VERSION.SDK_INT >= 23 && !hasLocationPermission()) {
-            requestPermissions(new String[]{
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-            }, REQ_LOC);
-        }
-    }
-
-    private void loadWeatherByLocation() {
-        try {
-            LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
-            if (lm == null) { loadWeatherByIp(); return; }
-
-            Location best = null;
-            for (String p : new String[]{LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER}) {
-                try {
-                    if (!lm.isProviderEnabled(p)) continue;
-                    Location l = lm.getLastKnownLocation(p);
-                    if (l != null && (best == null || l.getTime() > best.getTime())) best = l;
-                } catch (SecurityException ignored) {
-                }
+        weatherLoader = new WeatherLoader(this, new WeatherLoader.Callback() {
+            @Override
+            public void onWeather(WeatherCard card) {
+                paintWeather(card);
             }
-            if (best == null) { loadWeatherByIp(); return; }
 
-            final double lat = best.getLatitude();
-            final double lon = best.getLongitude();
-            Api.bg(() -> {
-                try {
-                    WeatherCard c = Api.weather(lat, lon);
-                    runOnUiThread(() -> paintWeather(c));
-                } catch (Exception e) {
-                    loadWeatherByIp();
-                }
-            });
-        } catch (Exception e) {
-            loadWeatherByIp();
-        }
-    }
-
-    private void loadWeatherByIp() {
-        Api.bg(() -> {
-            try {
-                WeatherCard c = Api.weather(0, 0);
-                runOnUiThread(() -> paintWeather(c));
-            } catch (Exception e) {
-                runOnUiThread(() -> {
-                    if (wxText != null) wxText.setText("天气不可用");
-                });
+            @Override
+            public void onFailed(String reason) {
+                wxCity.setText("天气不可用");
+                wxText.setText("点击右侧重试");
+                wxSub.setText(reason == null ? "" : reason);
             }
         });
-    }
-
-    private void loadWeatherByCity(String city) {
-        Api.bg(() -> {
-            try {
-                WeatherCard c = Api.weatherByCity(city);
-                runOnUiThread(() -> paintWeather(c));
-            } catch (Exception e) {
-                runOnUiThread(() -> toast("天气获取失败：" + e.getMessage()));
-            }
-        });
+        weatherLoader.start();
     }
 
     private void paintWeather(WeatherCard c) {
@@ -327,21 +273,16 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
             bg.setCornerRadius(dp(10));
             bg.setColor(0x14FFFFFF);
             cell.setBackground(bg);
-            int pad = dp(8);
-            cell.setPadding(pad, dp(6), pad, dp(6));
+            cell.setPadding(dp(8), dp(6), dp(8), dp(6));
 
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,
                     LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
             lp.setMarginEnd(dp(6));
             cell.setLayoutParams(lp);
 
-            TextView label = smallText(i == 0 ? "今天" : weekdayOf(d.date), 11, 0xFFB9D2F0);
-            TextView icon = smallText(d.icon == null ? "" : d.icon, 16, 0xFFFFFFFF);
-            TextView temp = smallText(Math.round(d.maxC) + "°/" + Math.round(d.minC) + "°", 12, 0xFFFFFFFF);
-
-            cell.addView(label);
-            cell.addView(icon);
-            cell.addView(temp);
+            cell.addView(smallText(i == 0 ? "今天" : weekdayOf(d.date), 11, 0xFFB9D2F0));
+            cell.addView(smallText(d.icon == null ? "" : d.icon, 16, 0xFFFFFFFF));
+            cell.addView(smallText(Math.round(d.maxC) + "°/" + Math.round(d.minC) + "°", 12, 0xFFFFFFFF));
             wxDays.addView(cell);
         }
     }
@@ -373,24 +314,20 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         EditText et = new EditText(this);
         et.setHint("城市名，如 北京 / 上海");
         et.setSingleLine(true);
-        et.setText(wxCityOverride == null ? "" : wxCityOverride);
+        et.setText(WeatherLoader.chosenCity(this));
         int pad = dp(14);
         et.setPadding(pad, pad, pad, pad);
 
         new AlertDialog.Builder(this)
                 .setTitle("设置天气城市")
-                .setMessage("留空则使用自动定位。")
+                .setMessage("留空则自动定位（系统定位 → IP 定位）。")
                 .setView(et)
                 .setNegativeButton("取消", null)
                 .setPositiveButton("确定", (d, w) -> {
                     String city = et.getText().toString().trim();
-                    wxCityOverride = city;
-                    prefs().edit().putString("wx_city", city).apply();
-                    if (city.isEmpty()) {
-                        loadWeatherByLocation();
-                    } else {
-                        loadWeatherByCity(city);
-                    }
+                    WeatherLoader.setChosenCity(this, city);
+                    if (weatherLoader != null) weatherLoader = null;
+                    initWeather();
                 })
                 .show();
     }
@@ -405,25 +342,53 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         if (requestCode == REQ_LOC) {
             boolean granted = false;
             for (int r : results) if (r == PackageManager.PERMISSION_GRANTED) granted = true;
-            if (granted) loadWeatherByLocation();
-            // 拒绝就继续用 IP 定位的结果，不打扰用户
+            if (granted) {
+                // 授权后重新加载，用真实定位覆盖 IP 结果
+                initWeather();
+            }
         }
     }
 
     // ========== 资讯（RSS） ==========
 
+    /**
+     * 加载二级分类。
+     *
+     * 之前分类不显示的原因：只在 onCreate 调一次，若那时网络未就绪就永远空着。
+     * 现在：每次进入资讯页都尝试刷新，且失败会重试一次。
+     */
     private void loadRssCats() {
+        loadRssCats(0);
+    }
+
+    private void loadRssCats(int attempt) {
         Api.bg(() -> {
             try {
                 List<RssCat> cats = Api.rssCats();
+                if (cats == null || cats.isEmpty()) {
+                    if (attempt < 2) {
+                        Thread.sleep(1200);
+                        loadRssCats(attempt + 1);
+                    }
+                    return;
+                }
                 runOnUiThread(() -> {
                     rssCatRow.removeAllViews();
-                    rssCatRow.addView(makeRssChip("全部", "", true));
+                    rssCatRow.addView(makeRssChip("全部", "", rssCat.isEmpty()));
                     for (RssCat c : cats) {
-                        rssCatRow.addView(makeRssChip(c.name + " " + c.count, c.key, false));
+                        if (c == null || c.key == null) continue;
+                        rssCatRow.addView(makeRssChip(
+                                c.name + " " + c.count, c.key, c.key.equals(rssCat)));
                     }
                 });
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                if (attempt < 2) {
+                    try {
+                        Thread.sleep(1500);
+                    } catch (InterruptedException ignored) {
+                    }
+                    loadRssCats(attempt + 1);
+                }
             }
         });
     }
@@ -439,11 +404,13 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         lp.setMarginEnd(dp(6));
         tv.setLayoutParams(lp);
         paintRssChip(tv, active);
-        tv.setTag(key);
+        tv.setTag(key == null ? "" : key);
         tv.setOnClickListener(v -> {
-            rssCat = String.valueOf(v.getTag() == null ? "" : v.getTag());
-            for (int i = 0; i < rssCatRow.getChildCount(); i++) {
-                View c = rssCatRow.getChildAt(i);
+            String k = String.valueOf(v.getTag() == null ? "" : v.getTag());
+            if (k.equals(rssCat)) return;
+            rssCat = k;
+            for (int idx = 0; idx < rssCatRow.getChildCount(); idx++) {
+                View c = rssCatRow.getChildAt(idx);
                 paintRssChip((TextView) c, c == v);
             }
             loadRss(true);
@@ -462,17 +429,26 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         tv.setTextColor(on ? Color.WHITE : ContextCompat.getColor(this, R.color.chaomi_text_dim));
     }
 
+    /**
+     * 拉资讯列表。
+     *
+     * @param reset true=重载第一页（切分类/首次进入）
+     *              false=加载更多
+     *
+     * 注意：这只是**读服务端已存的数据**。要真正拉新报道，
+     * 下拉刷新会先调 refreshRss()，见 rssSwipe 的回调。
+     */
     private void loadRss(boolean reset) {
         if (rssLoading) return;
         if (reset) {
             rssBefore = 0;
             rssHasMore = true;
-            rssSeen.clear();
         }
         if (!rssHasMore && !reset) return;
 
         rssLoading = true;
         if (reset) rssSwipe.setRefreshing(true);
+        rssMore.setVisibility(View.GONE);
 
         final String cat = rssCat;
         final long before = rssBefore;
@@ -485,7 +461,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
                     rssSwipe.setRefreshing(false);
                     rssLoadedOnce = true;
                     rssBefore = page.nextBefore;
-                    rssHasMore = page.hasMore && !page.list.isEmpty();
+                    rssHasMore = page.hasMore;
 
                     if (reset) {
                         rssList.clear();
@@ -500,8 +476,12 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
                     }
                     rssAdapter.notifyDataSetChanged();
                     rssMore.setVisibility(rssHasMore ? View.VISIBLE : View.GONE);
-                    if (added == 0 && rssList.isEmpty()) {
-                        toast("暂无资讯");
+
+                    if (rssList.isEmpty()) {
+                        toast("暂无资讯，下拉可让服务器重新抓取");
+                    } else if (added == 0 && rssHasMore) {
+                        // 本页全是重复的，继续往后翻
+                        loadRss(false);
                     }
                 });
             } catch (Exception e) {
@@ -514,13 +494,53 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         });
     }
 
+    /**
+     * 下拉刷新 = 让服务器抓新报道 + 重载列表。
+     *
+     * 之前的 bug：下拉只重读了已有数据，服务器端 15 分钟才拉一次，
+     * 所以用户永远看不到「新报道」。现在下拉会主动触发服务端拉取。
+     */
+    private void refreshRssAndReload() {
+        toast("正在让服务器抓取最新报道…");
+        Api.bg(() -> {
+            boolean triggered = true;
+            String note = "";
+            try {
+                Api.rssRefresh();
+            } catch (Exception e) {
+                // 429 = 5 分钟内已刷过，不算错误
+                triggered = false;
+                note = e.getMessage() == null ? "" : e.getMessage();
+            }
+            // 服务端拉取是异步的，等一会儿再读，否则读到的还是旧数据
+            if (triggered) {
+                try {
+                    Thread.sleep(6000);
+                } catch (InterruptedException ignored) {
+                }
+            }
+            final boolean okd = triggered;
+            final String msg = note;
+            runOnUiThread(() -> {
+                loadRssCats();
+                loadRss(true);
+                if (!okd) {
+                    toast(msg.contains("频繁") ? "刚抓取过，稍后再试" : "抓取请求失败");
+                } else {
+                    toast("已通知服务器抓取，稍候下拉查看");
+                }
+            });
+        });
+    }
+
+    /** 点资讯 → 打开服务端代理的阅读页（不直连第三方站） */
     private void openRss(RssItem it) {
-        if (it == null || it.link == null || it.link.isEmpty()) return;
-        try {
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(it.link)));
-        } catch (Exception e) {
-            toast("没有可用浏览器");
-        }
+        if (it == null) return;
+        Intent i = new Intent(this, RssReaderActivity.class);
+        i.putExtra("url", Api.rssArticleUrl(it.id));
+        i.putExtra("title", it.displayTitle());
+        i.putExtra("link", it.link == null ? "" : it.link);
+        startActivity(i);
     }
 
     // ---------- 账号 ----------
@@ -566,7 +586,8 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == EditorSheet.REQ_PICK && activeSheet != null) {
+        if ((requestCode == EditorSheet.REQ_PICK || requestCode == EditorSheet.REQ_CAMERA)
+                && activeSheet != null) {
             activeSheet.onPickResult(resultCode, data);
             return;
         }

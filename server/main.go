@@ -3062,6 +3062,15 @@ func doServe() error {
 	}
 
 	// ---- RSS 资讯（一级菜单 + 二级分类，服务端定时拉取并预翻译）----
+	// ---- 第三方服务巡检（异常飞书 + 邮件通知）----
+	if err := ensureWatchSchema(db); err != nil {
+		log.Printf("[serve] watch schema: %v", err)
+	} else {
+		startWatchLoop(db)
+		log.Printf("[serve] 服务巡检已启动（%d 个目标，每 %d 秒一轮 = 每分钟 4 次）",
+			len(watchTargets), int(watchInterval/time.Second))
+	}
+
 	if err := ensureRSSSchema(db); err != nil {
 		log.Printf("[serve] rss schema: %v", err)
 	} else {
@@ -3071,12 +3080,20 @@ func doServe() error {
 	}
 
 	go hub.run()
+	// ---- 服务巡检 ----
+	mux.HandleFunc("/api/watch/status", func(w http.ResponseWriter, r *http.Request) { handleWatchStatus(db, w, r) })
+	mux.HandleFunc("/api/watch/check", func(w http.ResponseWriter, r *http.Request) { handleWatchCheck(db, w, r) })
+	mux.HandleFunc("/api/watch/events", func(w http.ResponseWriter, r *http.Request) { handleWatchEvents(db, w, r) })
+	mux.HandleFunc("/api/watch/history", func(w http.ResponseWriter, r *http.Request) { handleWatchHistory(db, w, r) })
+
 	// ---- 天气（Open-Meteo，国外免费无需 key）----
 	mux.HandleFunc("/api/weather", func(w http.ResponseWriter, r *http.Request) { handleWeather(db, w, r) })
 
 	// ---- RSS 资讯 ----
 	mux.HandleFunc("/api/rss/cats", func(w http.ResponseWriter, r *http.Request) { handleRSSCats(db, w, r) })
 	mux.HandleFunc("/api/rss/items", func(w http.ResponseWriter, r *http.Request) { handleRSSItems(db, w, r) })
+	// 资讯原文代理：服务端抓取并清洗，App 用 WebView 渲染（不直连第三方）
+	mux.HandleFunc("/api/rss/article", func(w http.ResponseWriter, r *http.Request) { handleRSSArticle(db, w, r) })
 	mux.HandleFunc("/api/rss/refresh", func(w http.ResponseWriter, r *http.Request) {
 		// 手动触发一次拉取（前端下拉强刷用，5 分钟内只允许一次）
 		if r.Method != http.MethodPost {

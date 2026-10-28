@@ -406,32 +406,79 @@ func handleWeather(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": card})
 }
 
-// locateByIP 用 IP 粗略定位（Open-Meteo 不带 IP 定位，这里用 ip-api 的坐标字段）
+// locateByIP 用 IP 粗略定位
+//
+// ★ 关键：这里必须**快速失败**。
+//   App 请求天气时如果这里卡住 10 秒，用户看到的就是「一直在定位中」。
+//   所以：短超时 + 多源兜底 + 任一成功立即返回。
 func locateByIP(ip string) (lat, lon float64, city, region string, ok bool) {
-	q := url.Values{}
-	q.Set("lang", "zh-CN")
-	q.Set("fields", "status,country,regionName,city,lat,lon")
+	type reply struct {
+		lat, lon    float64
+		city, region string
+		ok          bool
+	}
+	ch := make(chan reply, 2)
 
-	api := "http://ip-api.com/json/" + ip + "?" + q.Encode()
-	resp, err := weatherHTTP.Get(api)
-	if err != nil {
-		return 0, 0, "", "", false
-	}
-	defer resp.Body.Close()
+	// 源 1：ip-api（信息最全，带经纬度）
+	go func() {
+		q := url.Values{}
+		q.Set("lang", "zh-CN")
+		q.Set("fields", "status,country,regionName,city,lat,lon")
+		c := &http.Client{Timeout: 1500 * time.Millisecond}
+		resp, err := c.Get("http://ip-api.com/json/" + ip + "?" + q.Encode())
+		if err != nil {
+			ch <- reply{}
+			return
+		}
+		defer resp.Body.Close()
+		var r struct {
+			Status     string  `json:"status"`
+			RegionName string  `json:"regionName"`
+			City       string  `json:"city"`
+			Lat        float64 `json:"lat"`
+			Lon        float64 `json:"lon"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&r); err != nil || r.Status != "success" || r.Lat == 0 {
+			ch <- reply{}
+			return
+		}
+		ch <- reply{r.Lat, r.Lon, r.City, r.RegionName, true}
+	}()
 
-	var r struct {
-		Status     string  `json:"status"`
-		Country    string  `json:"country"`
-		RegionName string  `json:"regionName"`
-		City       string  `json:"city"`
-		Lat        float64 `json:"lat"`
-		Lon        float64 `json:"lon"`
+	// 源 2：ipwho.is（HTTPS，作为 ip-api 失败时的兜底）
+	go func() {
+		c := &http.Client{Timeout: 1500 * time.Millisecond}
+		resp, err := c.Get("https://ipwho.is/" + ip + "?lang=zh-CN")
+		if err != nil {
+			ch <- reply{}
+			return
+		}
+		defer resp.Body.Close()
+		var r struct {
+			Success  bool    `json:"success"`
+			City     string  `json:"city"`
+			Region   string  `json:"region"`
+			Latitude float64 `json:"latitude"`
+			Longitude float64 `json:"longitude"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&r); err != nil || !r.Success || r.Latitude == 0 {
+			ch <- reply{}
+			return
+		}
+		ch <- reply{r.Latitude, r.Longitude, r.City, r.Region, true}
+	}()
+
+	// 谁先成功用谁；总共最多等 1.8 秒
+	deadline := time.After(1800 * time.Millisecond)
+	for i := 0; i < 2; i++ {
+		select {
+		case r := <-ch:
+			if r.ok {
+				return r.lat, r.lon, r.city, r.region, true
+			}
+		case <-deadline:
+			return 0, 0, "", "", false
+		}
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
-		return 0, 0, "", "", false
-	}
-	if r.Status != "success" || r.Lat == 0 {
-		return 0, 0, "", "", false
-	}
-	return r.Lat, r.Lon, r.City, r.RegionName, true
+	return 0, 0, "", "", false
 }

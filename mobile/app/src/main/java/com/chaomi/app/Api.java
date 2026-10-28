@@ -25,9 +25,47 @@ public class Api {
         TOKEN = t == null ? "" : t;
     }
 
+    /**
+     * 后台线程池。
+     *
+     * 原来是每次 new Thread(r).start() —— 列表滚动 + 图片 + 心跳 + WebSocket
+     * 同时触发时会瞬间创建几十个线程，低端机上直接卡顿甚至 OOM。
+     * 改成固定 4 线程 + 队列：并发受控、线程复用、任务排队不丢。
+     */
+    private static final java.util.concurrent.ThreadPoolExecutor POOL =
+            new java.util.concurrent.ThreadPoolExecutor(
+                    4, 8, 30L, java.util.concurrent.TimeUnit.SECONDS,
+                    new java.util.concurrent.LinkedBlockingQueue<Runnable>(256) {
+                        @Override
+                        public boolean offer(Runnable r) {
+                            // 队列满了就丢弃最老的任务，保证新请求不被饿死
+                            if (size() >= 256) poll();
+                            return super.offer(r);
+                        }
+                    },
+                    r -> {
+                        Thread t = new Thread(r, "chaomi-net");
+                        t.setDaemon(true);
+                        t.setPriority(Thread.NORM_PRIORITY - 1);
+                        return t;
+                    },
+                    new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
+
     /** 后台线程执行（网络禁止主线程） */
     public static void bg(Runnable r) {
-        new Thread(r).start();
+        if (r == null) return;
+        try {
+            POOL.execute(() -> {
+                try {
+                    r.run();
+                } catch (Throwable t) {
+                    // 后台任务异常不能影响 UI 线程，也不能拖垮整个池
+                    android.util.Log.w("chaomi", "bg task failed: " + t);
+                }
+            });
+        } catch (Throwable t) {
+            android.util.Log.w("chaomi", "bg submit failed: " + t);
+        }
     }
 
     // ---------- 账号 ----------
@@ -350,6 +388,18 @@ public class Api {
         return page;
     }
 
+    /** 资讯原文阅读页地址（服务端抓取并清洗，App 用 WebView 打开） */
+    public static String rssArticleUrl(long id) {
+        return BASE + "/api/rss/article?id=" + id;
+    }
+
+    /** 触发服务端拉取新资讯（5 分钟节流，服务端返回 429 时抛异常） */
+    public static void rssRefresh() throws Exception {
+        String json = post(BASE + "/api/rss/refresh", "{}");
+        Map<String, Object> root = gson.fromJson(json, Map.class);
+        if (err(root) != null) throw new Exception(err(root));
+    }
+
     // ---------- 天气（Open-Meteo） ----------
 
     /** 按坐标取天气；lat/lon 传 0 则服务端按请求 IP 定位 */
@@ -377,6 +427,19 @@ public class Api {
         Object d = root.get("data");
         if (d == null) throw new Exception("天气数据为空");
         return gson.fromJson(gson.toJson(d), WeatherCard.class);
+    }
+
+    /** 天气结果序列化（本地缓存用，避免多存一份解析逻辑） */
+    public static String gsonToCache(WeatherCard c) {
+        return gson.toJson(c);
+    }
+
+    public static WeatherCard gsonFromCache(String json) {
+        try {
+            return gson.fromJson(json, WeatherCard.class);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static long numL(Object o) {

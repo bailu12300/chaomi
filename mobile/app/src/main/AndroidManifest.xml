@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- 天气卡片：按定位取当前城市（用户可拒绝，拒绝后按 IP 定位） -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- 发文章时现场拍照 -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"
         tools:ignore="SelectedPhotoAccess" />
@@ -49,6 +52,12 @@
             android:exported="false"
             android:parentActivityName=".MainActivity"
             android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".RssReaderActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|locale|uiMode" />
 
         <activity
             android:name=".ReaderActivity"
@@ -115,6 +124,17 @@
             </intent-filter>
         </receiver>
 
-    </application>
+            <!-- 拍照临时文件的 FileProvider（targetSdk 24+ 必须）-->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.chaomi.app.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+</application>
 
 </manifest>

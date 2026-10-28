@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  拍照用的文件共享配置。
+  targetSdk 24+ 不允许用 file:// 传照片给相机，必须走 FileProvider 的 content:// 。
+
+  path 里的 chaomi_photos 必须与 EditorSheet.cameraDir() 创建的子目录一致，
+  否则相机会因为拿不到写权限而崩溃或存空文件。
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-files-path
+        name="chaomi_photos"
+        path="chaomi_photos/" />
+    <cache-path
+        name="chaomi_cache"
+        path="chaomi_photos/" />
+</paths>

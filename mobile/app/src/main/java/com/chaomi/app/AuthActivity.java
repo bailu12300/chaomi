@@ -8,6 +8,7 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
@@ -165,9 +166,18 @@ public class AuthActivity extends AppCompatActivity {
             toast("密码至少 6 位");
             return;
         }
-        if ((mode == Mode.REGISTER || mode == Mode.RESET) && code.isEmpty()) {
-            toast("请填写邮箱验证码");
-            return;
+        if (mode == Mode.REGISTER || mode == Mode.RESET) {
+            if (code.isEmpty()) {
+                showError("还差一个验证码",
+                        "请点「获取验证码」，到邮箱里找 6 位数字填入。\n\n"
+                        + "没收到？检查垃圾邮件箱，或稍后点「重新发送验证码」。"
+                        + (email.contains("@") ? "\n\n当前邮箱：" + email : ""));
+                return;
+            }
+            if (code.length() < 4) {
+                showError("验证码格式不对", "验证码是邮件里的 6 位数字，当前填写的是「" + code + "」。");
+                return;
+            }
         }
 
         submitBtn.setEnabled(false);
@@ -194,8 +204,9 @@ public class AuthActivity extends AppCompatActivity {
 
                 runOnUiThread(() -> {
                     submitBtn.setEnabled(true);
+                    submitBtn.setText(btnLabel(m));
                     if (r == null || r.token == null || r.token.isEmpty()) {
-                        toast("操作失败：响应异常");
+                        showError("注册失败", "服务器返回的数据不完整，请稍后重试");
                         return;
                     }
                     Session.save(this, r.token, r.user);
@@ -206,12 +217,48 @@ public class AuthActivity extends AppCompatActivity {
                     finish();
                 });
             } catch (Exception e) {
+                final String msg = e.getMessage() == null ? "操作失败" : e.getMessage();
                 runOnUiThread(() -> {
                     submitBtn.setEnabled(true);
-                    toast(e.getMessage() == null ? "操作失败" : e.getMessage());
+                    submitBtn.setText(btnLabel(mode));
+                    // 用对话框而不是 Toast：Toast 一闪而过，用户经常看不到
+                    showError("操作未成功", msg);
                 });
             }
         });
+    }
+
+    /** 弹明确的错误框，并给出可执行的下一步 */
+    private void showError(String title, String msg) {
+        String tip = msg == null ? "" : msg;
+        AlertDialog.Builder b = new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage(tip)
+                .setPositiveButton("知道了", null);
+
+        // 针对常见错误给直接的动作，而不是让用户自己猜
+        if (tip.contains("验证码")) {
+            b.setNeutralButton("重新发送验证码", (d, w) -> {
+                sendCodeBtn.setEnabled(true);
+                sendCodeBtn.setText("获取验证码");
+                sendCode();
+            });
+        } else if (tip.contains("已注册") || tip.contains("邮箱或密码")) {
+            b.setNeutralButton(mode == Mode.LOGIN ? "去注册" : "去登录", (d, w) -> {
+                applyMode(mode == Mode.LOGIN ? Mode.REGISTER : Mode.LOGIN);
+            });
+        } else if (tip.contains("网络") || tip.contains("超时") || tip.contains("connect")) {
+            b.setNeutralButton("重试", (d, w) -> submit());
+        }
+        b.show();
+    }
+
+    private String btnLabel(Mode m) {
+        switch (m) {
+            case REGISTER: return "注册并登录";
+            case RESET: return "重置密码";
+            default: return "登录";
+        }
     }
 
     @Override
