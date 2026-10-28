@@ -51,6 +51,32 @@ public class Api {
                     },
                     new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
 
+    /**
+     * 全局 HTTP 客户端：DNS 走 DoH（见 NetDns）。
+     *
+     * 为什么不用 HttpURLConnection：它无法替换 DNS 解析，
+     * 一旦用户路由器/运营商缓存了过期 IP，App 就完全连不上服务器。
+     * OkHttp 可以注入自定义 Dns，彻底绕开本地 DNS。
+     */
+    private static volatile okhttp3.OkHttpClient CLIENT;
+
+    static okhttp3.OkHttpClient client() {
+        if (CLIENT == null) {
+            synchronized (Api.class) {
+                if (CLIENT == null) {
+                    okhttp3.OkHttpClient.Builder b = new okhttp3.OkHttpClient.Builder()
+                            .dns(NetDns.get())
+                            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                            .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                            .retryOnConnectionFailure(true);
+                    CLIENT = b.build();
+                }
+            }
+        }
+        return CLIENT;
+    }
+
     /** 后台线程执行（网络禁止主线程） */
     public static void bg(Runnable r) {
         if (r == null) return;
@@ -388,11 +414,6 @@ public class Api {
         return page;
     }
 
-    /** 资讯原文阅读页地址（服务端抓取并清洗，App 用 WebView 打开） */
-    public static String rssArticleUrl(long id) {
-        return BASE + "/api/rss/article?id=" + id;
-    }
-
     /** 触发服务端拉取新资讯（5 分钟节流，服务端返回 429 时抛异常） */
     public static void rssRefresh() throws Exception {
         String json = post(BASE + "/api/rss/refresh", "{}");
@@ -596,26 +617,27 @@ public class Api {
     }
 
     public static List<String> upload(List<Part> parts) throws Exception {
-        String boundary = "----chaomi" + System.currentTimeMillis();
-        HttpURLConnection conn = (HttpURLConnection) new URL(BASE + "/api/community/upload").openConnection();
-        conn.setDoOutput(true);
-        conn.setRequestMethod("POST");
-        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
-        auth(conn);
-        conn.setConnectTimeout(30000);
-        conn.setReadTimeout(60000);
-        OutputStream os = conn.getOutputStream();
+        // 用 OkHttp 组 multipart：DNS 走 DoH，且不用手写 boundary 拼接
+        okhttp3.MultipartBody.Builder mb = new okhttp3.MultipartBody.Builder()
+                .setType(okhttp3.MultipartBody.FORM);
         for (Part p : parts) {
-            os.write(("--" + boundary + "\r\n").getBytes("UTF-8"));
-            os.write(("Content-Disposition: form-data; name=\"file\"; filename=\"" + p.name + "\"\r\n").getBytes("UTF-8"));
-            os.write("Content-Type: image/*\r\n\r\n".getBytes("UTF-8"));
-            os.write(p.data);
-            os.write("\r\n".getBytes("UTF-8"));
+            mb.addFormDataPart("file", p.name,
+                    okhttp3.RequestBody.create(
+                            okhttp3.MediaType.parse("image/*"), p.data));
         }
-        os.write(("--" + boundary + "--\r\n").getBytes("UTF-8"));
-        os.flush();
-        os.close();
-        String resp = read(conn);
+        okhttp3.Request.Builder rb = new okhttp3.Request.Builder()
+                .url(BASE + "/api/community/upload")
+                .post(mb.build());
+        if (TOKEN != null && !TOKEN.isEmpty()) {
+            rb.header("Authorization", "Bearer " + TOKEN);
+        }
+        String resp;
+        okhttp3.Response r = client().newCall(rb.build()).execute();
+        try {
+            resp = r.body() == null ? "" : r.body().string();
+        } finally {
+            r.close();
+        }
         Map<String, Object> root = gson.fromJson(resp, Map.class);
         if (err(root) != null) throw new Exception(err(root));
         Object data = root.get("data");
@@ -657,19 +679,48 @@ public class Api {
     }
 
     private static String request(String method, String u, String body) throws Exception {
-        HttpURLConnection c = (HttpURLConnection) new URL(u).openConnection();
-        c.setRequestMethod(method);
-        c.setConnectTimeout(20000);
-        c.setReadTimeout(30000);
-        auth(c);
-        if (body != null) {
-            c.setDoOutput(true);
-            c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            OutputStream os = c.getOutputStream();
-            os.write(body.getBytes("UTF-8"));
-            os.close();
+        return executeWithRetry(method, u, body, true);
+    }
+
+    /**
+     * 发起请求；连接类失败时清掉 DoH 缓存重试一次。
+     *
+     * 场景：DoH 拿到的 IP 恰好下线/切换，清缓存重解析能自愈。
+     */
+    private static String executeWithRetry(String method, String u, String body,
+                                           boolean allowRetry) throws Exception {
+        okhttp3.Request.Builder rb = new okhttp3.Request.Builder().url(u);
+        if (!TOKEN.isEmpty()) {
+            rb.header("Authorization", "Bearer " + TOKEN);
         }
-        return read(c);
+        if (body != null) {
+            rb.method(method, okhttp3.RequestBody.create(
+                    okhttp3.MediaType.parse("application/json; charset=utf-8"), body));
+        } else {
+            rb.method(method, null);
+        }
+
+        try {
+            okhttp3.Response resp = client().newCall(rb.build()).execute();
+            try {
+                okhttp3.ResponseBody bd = resp.body();
+                String text = bd == null ? "" : bd.string();
+                if (resp.code() >= 400 && (text == null || text.trim().isEmpty())) {
+                    // 保留状态码语义，交给上层 err() 判断
+                    return "{\"error\":\"HTTP " + resp.code() + "\"}";
+                }
+                return text;
+            } finally {
+                resp.close();
+            }
+        } catch (java.io.IOException ioe) {
+            if (allowRetry) {
+                // DNS 可能过期 / 网络切换：清缓存重试一次
+                NetDns.invalidateAll();
+                return executeWithRetry(method, u, body, false);
+            }
+            throw ioe;
+        }
     }
 
     private static String read(HttpURLConnection c) throws Exception {

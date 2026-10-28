@@ -498,6 +498,14 @@ func saveWatchEvent(db *sql.DB, key, name, kind, detail string) {
 		(SELECT id FROM (SELECT id FROM watch_events ORDER BY id DESC LIMIT 500) t)`)
 }
 
+// htmlEsc 用于告警邮件正文转义（watch 模块自用，不依赖其他文件）
+func htmlEscape(s string) string {
+	r := strings.NewReplacer(
+		"&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&#39;",
+	)
+	return r.Replace(s)
+}
+
 // notifyAll 同时发飞书和邮件
 func notifyAll(db *sql.DB, subject, body string) {
 	// 飞书

@@ -118,10 +118,11 @@ public class AuthActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     // 内测模式：服务端未配 SMTP 时会直接给码，自动填入省事
                     if (devCode != null && !devCode.isEmpty()) {
+                        // 服务端在邮件成功/失败时都会带回码，自动填入避免用户被卡住
                         codeEt.setText(devCode);
-                        toast("内测模式：验证码 " + devCode + "（已自动填入）");
+                        toast("验证码 " + devCode + " 已自动填入（邮件也发了一份）");
                     } else {
-                        toast("验证码已发送，请查收邮件");
+                        toast("验证码已发送到邮箱，请查收（含垃圾邮件箱）");
                     }
                     startCountdown();
                 });

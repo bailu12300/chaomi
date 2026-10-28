@@ -46,11 +46,17 @@ type rssFeed struct {
 	Lang string // zh / en
 }
 
-// 每类保留条数上限
-const rssMaxPerCategory = 200
+// 每类常备条数（服务器端池子，App 从这里按需取）
+//
+// 为什么从 200 提到 1000：
+//   客户端改成「每次只取 5~15 条且不累积」，等于每次都从池子里重新取头部。
+//   池子太小会导致翻两页就见底，用户感觉「没内容」。
+//   1000 条 × 5 类 = 5000 行，MySQL 毫无压力（带 (category,pub_at) 索引）。
+const rssMaxPerCategory = 1000
 
-// 客户端单次刷新上限
+// 客户端单次刷新上限（需求：一次请求 5~15 条）
 const rssMaxPageSize = 15
+const rssMinPageSize = 5
 
 // 手动刷新节流（5 分钟一次，防止被刷）
 var lastRSSManual time.Time
@@ -627,6 +633,9 @@ func handleRSSItems(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	}
 	if limit > rssMaxPageSize {
 		limit = rssMaxPageSize
+	}
+	if limit < rssMinPageSize {
+		limit = rssMinPageSize
 	}
 	var before int64
 	if v := r.URL.Query().Get("before"); v != "" {

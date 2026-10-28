@@ -256,9 +256,10 @@ tr:hover td{background:#fafbfc}
 
   <header>
     <h1>服务监控</h1>
-    <span class="badge <?= $allOk ? 'ok' : 'bad' ?>">
+    <span class="badge <?= $allOk ? 'ok' : 'bad' ?>" id="topBadge">
       <?= $allOk ? '全部正常' : ($summary['down'] . ' 项异常') ?>
     </span>
+    <span class="muted" id="liveDot" title="实时更新中">● 实时</span>
     <span class="muted">每 15 秒探测一次（每分钟 4 次）</span>
     <span class="spacer"></span>
     <a class="btn" href="">刷新</a>
@@ -274,9 +275,9 @@ tr:hover td{background:#fafbfc}
 
   <div class="cards">
     <div class="card"><div class="k">监控目标</div><div class="v acc"><?= $summary['total'] ?></div></div>
-    <div class="card"><div class="k">在线</div><div class="v ok"><?= $summary['up'] ?></div></div>
-    <div class="card"><div class="k">异常</div><div class="v <?= $summary['down'] > 0 ? 'bad' : '' ?>"><?= $summary['down'] ?></div></div>
-    <div class="card"><div class="k">平均延迟</div><div class="v"><?= $summary['avgMs'] ?><span style="font-size:14px"> ms</span></div></div>
+    <div class="card"><div class="k">在线</div><div class="v ok" id="cntUp"><?= $summary['up'] ?></div></div>
+    <div class="card"><div class="k">异常</div><div class="v <?= $summary['down'] > 0 ? 'bad' : '' ?>" id="cntDown"><?= $summary['down'] ?></div></div>
+    <div class="card"><div class="k">平均延迟</div><div class="v"><span id="cntMs"><?= $summary['avgMs'] ?></span><span style="font-size:14px"> ms</span></div></div>
   </div>
 
   <div class="panel">
@@ -294,18 +295,18 @@ tr:hover td{background:#fafbfc}
         $msCls = $ms < 200 ? 'fast' : ($ms < 800 ? 'slow' : 'vslow');
         $pts = history($pdo, (string)$t['target_key'], 90);
 ?>
-        <tr>
+        <tr data-key="<?= h($t['target_key']) ?>">
           <td class="name"><?= h($t['name']) ?></td>
-          <td>
+          <td class="stat">
             <span class="dot <?= $ok ? 'ok' : 'bad' ?>"></span>
-            <?= $ok ? '正常' : '异常' ?>
+            <span class="stxt"><?= $ok ? '正常' : '异常' ?></span>
             <?php if (!$ok && (int)$t['fail_streak'] > 0): ?>
               <span class="muted">（连续 <?= (int)$t['fail_streak'] ?> 次）</span>
             <?php endif; ?>
           </td>
-          <td class="ms <?= $ok ? $msCls : '' ?>"><?= $ok ? $ms . ' ms' : '—' ?></td>
+          <td class="ms lat <?= $ok ? $msCls : '' ?>"><?= $ok ? $ms . ' ms' : '—' ?></td>
           <td><div class="spark"><?= sparkline($pts) ?></div></td>
-          <td class="muted"><?= ago((int)$t['checked_at']) ?></td>
+          <td class="muted at"><?= ago((int)$t['checked_at']) ?></td>
         </tr>
 <?php if (!$ok && trim((string)$t['err_msg']) !== ''): ?>
         <tr><td colspan="5" class="err" style="padding-top:0">
@@ -343,6 +344,114 @@ tr:hover td{background:#fafbfc}
   </div>
 
 <?php endif; ?>
+
+  <script>
+  /**
+   * 实时更新：只更新展示，不改变服务端采集频率（服务端仍每 15 秒探一次）。
+   *
+   * 做法：每 3 秒拉一次 JSON，按 data-key 局部替换文字/颜色，
+   * 不整页刷新——避免闪烁、也避免重复拉全量 HTML。
+   */
+  (function () {
+    var REFRESH_MS = 3000;
+    var API = '/api/watch/status';
+    var dot = document.getElementById('liveDot');
+
+    function cls(ms) {
+      return ms < 200 ? 'fast' : (ms < 800 ? 'slow' : 'vslow');
+    }
+    function ago(ts) {
+      if (!ts) return '—';
+      var d = Date.now() - ts;
+      if (d < 5000) return '刚刚';
+      if (d < 60000) return Math.floor(d / 1000) + ' 秒前';
+      if (d < 3600000) return Math.floor(d / 60000) + ' 分钟前';
+      if (d < 86400000) return Math.floor(d / 3600000) + ' 小时前';
+      return new Date(ts).toLocaleDateString();
+    }
+
+    function tick() {
+      fetch(API, { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          var d = j && j.data;
+          if (!d || !d.list) return;
+
+          // 统计卡
+          var up = document.getElementById('cntUp');
+          var down = document.getElementById('cntDown');
+          var msEl = document.getElementById('cntMs');
+          if (up) up.textContent = d.up;
+          if (down) {
+            down.textContent = d.down;
+            down.className = 'v' + (d.down > 0 ? ' bad' : '');
+          }
+          var allOk = d.down === 0 && d.list.length > 0;
+          var badge = document.getElementById('topBadge');
+          if (badge) {
+            badge.className = 'badge ' + (allOk ? 'ok' : 'bad');
+            badge.textContent = allOk ? '全部正常' : (d.down + ' 项异常');
+          }
+
+          // 逐行更新
+          var sumMs = 0, cnt = 0;
+          d.list.forEach(function (x) {
+            var tr = document.querySelector('tr[data-key="' + x.key + '"]');
+            if (!tr) return;
+            var stat = tr.querySelector('.stat');
+            if (stat) {
+              var ok = !!x.ok;
+              stat.innerHTML = '<span class="dot ' + (ok ? 'ok' : 'bad') + '"></span>'
+                + '<span class="stxt">' + (ok ? '正常' : '异常') + '</span>'
+                + (!ok && x.failStreak > 0
+                    ? ' <span class="muted">（连续 ' + x.failStreak + ' 次）</span>' : '');
+            }
+            var lat = tr.querySelector('.lat');
+            if (lat) {
+              if (x.ok) {
+                lat.textContent = x.latencyMs + ' ms';
+                lat.className = 'ms lat ' + cls(x.latencyMs);
+                sumMs += x.latencyMs; cnt++;
+              } else {
+                lat.textContent = '—';
+                lat.className = 'ms lat';
+              }
+            }
+            var at = tr.querySelector('.at');
+            if (at) at.textContent = ago(x.checkedAt);
+          });
+          if (msEl) msEl.textContent = cnt > 0 ? Math.round(sumMs / cnt) : 0;
+
+          // 实时指示灯闪烁一下，表示刚更新
+          if (dot) {
+            dot.style.opacity = '1';
+            setTimeout(function () { dot.style.opacity = '0.45'; }, 400);
+          }
+        })
+        .catch(function () {
+          if (dot) {
+            dot.textContent = '● 连接中断';
+            dot.style.color = '#cf222e';
+          }
+        });
+    }
+
+    // 页面隐藏时暂停轮询，省电省流量
+    var timer = null;
+    function start() {
+      if (timer) return;
+      tick();
+      timer = setInterval(tick, REFRESH_MS);
+    }
+    function stop() {
+      if (timer) { clearInterval(timer); timer = null; }
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) stop(); else start();
+    });
+    start();
+  })();
+  </script>
 
   <div class="foot">
     数据由 Go 服务每 15 秒采集写入 MySQL，本页仅读取展示 · 异常自动推送飞书 + 邮件<br>

@@ -438,6 +438,9 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
      * 注意：这只是**读服务端已存的数据**。要真正拉新报道，
      * 下拉刷新会先调 refreshRss()，见 rssSwipe 的回调。
      */
+    // 单次请求条数：需求 5~15 条。取 10 是体验与流量的平衡点。
+    private static final int RSS_PAGE_SIZE = 10;
+
     private void loadRss(boolean reset) {
         if (rssLoading) return;
         if (reset) {
@@ -455,7 +458,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
 
         Api.bg(() -> {
             try {
-                Api.RssPage page = Api.rssItems(cat, before, 12);
+                Api.RssPage page = Api.rssItems(cat, before, RSS_PAGE_SIZE);
                 runOnUiThread(() -> {
                     rssLoading = false;
                     rssSwipe.setRefreshing(false);
@@ -464,8 +467,10 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
                     rssHasMore = page.hasMore;
 
                     if (reset) {
+                        // 新一轮 = 全新一页，丢掉上一轮的全部内容（不累积）
                         rssList.clear();
                         rssSeen.clear();
+                        rssAdapter.notifyDataSetChanged();
                     }
                     int added = 0;
                     for (RssItem it : page.list) {
@@ -533,13 +538,21 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         });
     }
 
-    /** 点资讯 → 打开服务端代理的阅读页（不直连第三方站） */
+    /**
+     * 点资讯 → App 直接打开原文（请求不经过服务器）。
+     *
+     * 阅读体验由客户端自己解决：WebView 加载后注入阅读样式（见 RssReaderActivity）。
+     * 这样既不消耗服务器带宽，也不把用户 IP 暴露给第三方代理。
+     */
     private void openRss(RssItem it) {
-        if (it == null) return;
+        if (it == null || it.link == null || it.link.isEmpty()) {
+            toast("该资讯没有原文链接");
+            return;
+        }
         Intent i = new Intent(this, RssReaderActivity.class);
-        i.putExtra("url", Api.rssArticleUrl(it.id));
+        i.putExtra("url", it.link);
         i.putExtra("title", it.displayTitle());
-        i.putExtra("link", it.link == null ? "" : it.link);
+        i.putExtra("link", it.link);
         startActivity(i);
     }
 

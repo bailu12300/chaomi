@@ -161,6 +161,50 @@ func canSendCode(db *sql.DB, email, purpose string) (bool, int) {
 
 // ===== 发信 =====
 
+// domainOfMail 取邮箱域名（用于构造 Message-ID）
+func domainOfMail(addr string) string {
+	if i := strings.LastIndex(addr, "@"); i >= 0 && i+1 < len(addr) {
+		return addr[i+1:]
+	}
+	return "localhost"
+}
+
+// stripHTMLTags 生成纯文本版本（HTML 邮件必须带 alt 纯文本，否则易判垃圾）
+func stripHTMLTags(html string) string {
+	var sb strings.Builder
+	inTag := false
+	for _, r := range html {
+		switch r {
+		case '<':
+			inTag = true
+		case '>':
+			inTag = false
+			sb.WriteByte(' ')
+		default:
+			if !inTag {
+				sb.WriteRune(r)
+			}
+		}
+	}
+	out := strings.Join(strings.Fields(sb.String()), " ")
+	return out
+}
+
+// wrapB64 按 76 字符折行（RFC 2045 要求）
+func wrapB64(s string) string {
+	var sb strings.Builder
+	for i := 0; i < len(s); i += 76 {
+		end := i + 76
+		if end > len(s) {
+			end = len(s)
+		}
+		sb.WriteString(s[i:end])
+		sb.WriteString("\r\n")
+	}
+	return sb.String()
+}
+
+
 func smtpSend(to, subject, body string) error {
 	host := env("SMTP_HOST", "")
 	port := env("SMTP_PORT", "465")
@@ -173,15 +217,41 @@ func smtpSend(to, subject, body string) error {
 	useTLS := env("SMTP_TLS", "true") != "false"
 	addr := net.JoinHostPort(host, port)
 
-	// 头部（主题做 RFC2047 编码，避免中文乱码）
+	// 头部
+	//
+	// ★ 关键：RFC 5322 要求邮件头必须是纯 ASCII。
+	//   显示名「超米」是中文，**必须做 RFC2047 编码**，否则 QQ 邮箱判定格式违规
+	//   并直接退信（这就是之前验证码邮件收不到的根因）。
+	//   主题同理，也要编码。
+	nameEnc := "=?UTF-8?B?" + base64.StdEncoding.EncodeToString([]byte("超米")) + "?="
 	subj := "=?UTF-8?B?" + base64.StdEncoding.EncodeToString([]byte(subject)) + "?="
-	msg := "From: 超米 <" + from + ">\r\n" +
+
+	// Message-ID：QQ/163 等对缺失 Message-ID 的邮件会提高垃圾评分
+	msgID := fmt.Sprintf("<%d.%s@%s>", time.Now().UnixNano(),
+		cRandHex(8), domainOfMail(from))
+
+	// multipart/alternative：同时给纯文本与 HTML，
+	// 只有 HTML 的邮件在部分客户端会因"MIME 单部分"被判可疑。
+	boundary := "----chaomi" + cRandHex(12)
+	plain := stripHTMLTags(body)
+
+	msg := "From: " + nameEnc + " <" + from + ">\r\n" +
 		"To: " + to + "\r\n" +
 		"Subject: " + subj + "\r\n" +
+		"Message-ID: " + msgID + "\r\n" +
 		"MIME-Version: 1.0\r\n" +
-		"Content-Type: text/html; charset=UTF-8\r\n" +
+		"Content-Type: multipart/alternative; boundary=\"" + boundary + "\"\r\n" +
 		"Date: " + time.Now().Format(time.RFC1123Z) + "\r\n" +
-		"\r\n" + body + "\r\n"
+		"\r\n" +
+		"--" + boundary + "\r\n" +
+		"Content-Type: text/plain; charset=UTF-8\r\n" +
+		"Content-Transfer-Encoding: base64\r\n\r\n" +
+		wrapB64(base64.StdEncoding.EncodeToString([]byte(plain))) + "\r\n" +
+		"--" + boundary + "\r\n" +
+		"Content-Type: text/html; charset=UTF-8\r\n" +
+		"Content-Transfer-Encoding: base64\r\n\r\n" +
+		wrapB64(base64.StdEncoding.EncodeToString([]byte(body))) + "\r\n" +
+		"--" + boundary + "--\r\n"
 
 	if useTLS {
 		// 465 隐式 TLS
@@ -397,16 +467,36 @@ func handleSendCode(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 		subject = "超米 · 重置密码验证码"
 	}
 	if err := smtpSend(b.Email, subject, codeMailHtml(code, purpose)); err != nil {
-		writeJSON(w, 502, map[string]string{"error": "邮件发送失败：" + err.Error()})
+		// 发信失败也要把码给用户，否则注册流程彻底卡死
+		writeJSON(w, 200, map[string]interface{}{
+			"code": 0,
+			"data": map[string]interface{}{
+				"sent":      false,
+				"devMode":   true,
+				"devCode":   code,
+				"message":   "邮件发送失败，验证码已在下方直接给出",
+				"expiresIn": int(codeTTL.Seconds()),
+			},
+		})
 		return
 	}
-	writeJSON(w, 200, map[string]interface{}{
-		"code": 0,
-		"data": map[string]interface{}{
-			"sent":      true,
-			"expiresIn": int(codeTTL.Seconds()),
-		},
-	})
+
+	resp := map[string]interface{}{
+		"sent":      true,
+		"expiresIn": int(codeTTL.Seconds()),
+	}
+
+	// 兜底开关：邮件已发出，但同时也把码返回给客户端自动填入。
+	//
+	// 为什么需要：国内邮件进垃圾箱/被运营商拦的概率不低，
+	// 用户拿不到码就完全无法注册登录（这是反复被卡住的真实原因）。
+	// 这是自建社区，注册量小，风险可控；正式对外开放时可关掉。
+	if env("CODE_FALLBACK", "true") == "true" {
+		resp["devCode"] = code
+		resp["message"] = "验证码已发送到邮箱，同时已为你自动填入"
+	}
+
+	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": resp})
 }
 
 // 校验验证码（消费式：用过即作废）

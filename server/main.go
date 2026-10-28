@@ -3032,7 +3032,8 @@ func doServe() error {
 			http.NotFound(w, r)
 			return
 		}
-		http.Redirect(w, r, "/community", http.StatusFound)
+		// 网页端已撤：首页直接给下载页，App 是唯一客户端
+		http.Redirect(w, r, "/app", http.StatusFound)
 	})
 	// 行情详情 / 散点图已移除（页面不再提供）
 
@@ -3092,8 +3093,6 @@ func doServe() error {
 	// ---- RSS 资讯 ----
 	mux.HandleFunc("/api/rss/cats", func(w http.ResponseWriter, r *http.Request) { handleRSSCats(db, w, r) })
 	mux.HandleFunc("/api/rss/items", func(w http.ResponseWriter, r *http.Request) { handleRSSItems(db, w, r) })
-	// 资讯原文代理：服务端抓取并清洗，App 用 WebView 渲染（不直连第三方）
-	mux.HandleFunc("/api/rss/article", func(w http.ResponseWriter, r *http.Request) { handleRSSArticle(db, w, r) })
 	mux.HandleFunc("/api/rss/refresh", func(w http.ResponseWriter, r *http.Request) {
 		// 手动触发一次拉取（前端下拉强刷用，5 分钟内只允许一次）
 		if r.Method != http.MethodPost {
@@ -3176,15 +3175,16 @@ func doServe() error {
 	mux.HandleFunc("/api/article/import", func(w http.ResponseWriter, r *http.Request) { handleArticleImport(db, w, r) })
 	mux.HandleFunc("/api/community/upload", func(w http.ResponseWriter, r *http.Request) { handleCommunityUpload(w, r) })
 	mux.HandleFunc("/ws/community", func(w http.ResponseWriter, r *http.Request) { serveWsCommunity(w, r) })
-	// 社区 SPA 静态托管
+	// 网页端（社区 PWA）已下线：只保留 App 客户端。
+	// /community 仍保留重定向，避免老书签 404。
 	communityDir = base + "/site/community"
-	mux.Handle("/community/assets/", http.StripPrefix("/community/assets/", http.FileServer(http.Dir(communityDir+"/assets"))))
-	mux.Handle("/community/uploads/", http.StripPrefix("/community/uploads/", http.FileServer(http.Dir(communityDir+"/uploads"))))
+	mux.Handle("/community/uploads/", http.StripPrefix("/community/uploads/",
+		http.FileServer(http.Dir(communityDir+"/uploads"))))
 	mux.HandleFunc("/community", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, communityDir+"/index.html")
+		http.Redirect(w, r, "/app", http.StatusFound)
 	})
 	mux.HandleFunc("/community/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, communityDir+"/index.html")
+		http.Redirect(w, r, "/app", http.StatusFound)
 	})
 	// 原生 App 下载
 	mux.Handle("/downloads/", http.StripPrefix("/downloads/", http.FileServer(http.Dir(base+"/site/downloads"))))

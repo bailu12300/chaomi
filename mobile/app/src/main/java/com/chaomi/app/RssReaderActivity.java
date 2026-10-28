@@ -19,14 +19,17 @@ import androidx.appcompat.app.AppCompatActivity;
 /**
  * 资讯原文阅读页。
  *
- * 数据来源：**服务端代理**（/api/rss/article?id=xxx）
- *   服务端抓原文 → 去脚本/去广告 → 注入阅读样式 → 返回 HTML
- *   App 只负责显示，**不直连任何第三方站**
+ * **直连原文**（请求不经过服务器），阅读体验由客户端自己优化：
+ *   WebView 加载真实 URL → 页面加载完成后注入阅读样式（CSS）
+ *   → 隐藏导航/侧栏/广告浮层，正文宽度自适应手机屏
  *
- * 三个好处：
- *   1. 不受第三方站墙/慢/弹窗墙影响（走自己服务器）
- *   2. 移动网络下省流量（服务端已裁剪掉无关内容）
- *   3. 原文抓取失败时服务端会返回 RSS 摘要页，不会白屏
+ * 为什么在客户端做而不是服务端代理：
+ *   · 不消耗服务器带宽（原文可能几 MB，代理等于流量翻倍）
+ *   · 不把用户 IP 暴露给自己的服务器中转
+ *   · 服务端少一次外部抓取，故障面更小
+ *
+ * 代价：拿不到服务端的 HTML 清洗，靠 CSS 压制干扰元素；
+ *       个别重脚本站点（如需要 JS 渲染的）可能显示不完整。
  */
 public class RssReaderActivity extends AppCompatActivity {
 
@@ -92,6 +95,7 @@ public class RssReaderActivity extends AppCompatActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 bar.setVisibility(View.GONE);
+                injectReaderStyle(view);
             }
 
             @Override
@@ -121,6 +125,77 @@ public class RssReaderActivity extends AppCompatActivity {
             return;
         }
         web.loadUrl(pageUrl);
+    }
+
+    /**
+     * 注入阅读优化样式。
+     *
+     * 只加 CSS，不删 DOM、不执行站点自己的脚本——避免破坏页面逻辑。
+     * 用 !important 压制原站样式的干扰（导航、侧栏、分享条、浮层）。
+     */
+    private void injectReaderStyle(WebView view) {
+        String css = String.join(" ",
+            "html{-webkit-text-size-adjust:100%!important}",
+            "body{margin:0!important;padding:14px 16px 48px!important;",
+            "background:#f6f8fa!important;color:#1f2328!important;",
+            "font:16px/1.75 -apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif!important;",
+            "max-width:100%!important;overflow-x:hidden!important}",
+            "img,video{max-width:100%!important;height:auto!important}",
+            "table{max-width:100%!important;display:block!important;overflow-x:auto!important}",
+            "pre{overflow-x:auto!important;background:#161b22!important;color:#e6edf3!important;",
+            "padding:12px!important;border-radius:8px!important;font-size:13px!important}",
+            // 压制常见干扰元素
+            "nav,header,footer,aside,",
+            "[class*='nav'],[class*='Nav'],[class*='header'],[class*='Header'],",
+            "[class*='footer'],[class*='Footer'],[class*='sidebar'],[class*='Sidebar'],",
+            "[class*='share'],[class*='Share'],[class*='comment'],[class*='Comment'],",
+            "[class*='related'],[class*='Related'],[class*='recommend'],[class*='Recommend'],",
+            "[class*='advert'],[class*='Advert'],[class*='banner'],[class*='Banner'],",
+            "[class*='popup'],[class*='Popup'],[class*='modal'],[class*='Modal'],",
+            "[class*='qrcode'],[class*='Qrcode'],[class*='app-download'],",
+            "[id*='nav'],[id*='header'],[id*='footer'],[id*='sidebar'],",
+            "[id*='share'],[id*='comment'],[id*='related'],[id*='banner']",
+            "{display:none!important}",
+            // 固定浮层（返回顶部、客服、下载 App）会遮正文
+            "[style*='position:fixed'],[style*='position: fixed']{display:none!important}",
+            "a{color:#0969da!important;text-decoration:none!important}",
+            "h1,h2,h3,h4{line-height:1.4!important;margin:20px 0 10px!important;color:#111!important}",
+            "p{margin:0 0 14px!important}",
+            "blockquote{margin:14px 0!important;padding:10px 14px!important;",
+            "background:#eef1f5!important;border-left:3px solid #0969da!important;",
+            "border-radius:0 8px 8px 0!important}"
+        );
+        String js = "(function(){try{"
+            + "var s=document.getElementById('chaomi-reader');"
+            + "if(s)return;"
+            + "s=document.createElement('style');s.id='chaomi-reader';"
+            + "s.textContent=" + jsString(css) + ";"
+            + "(document.head||document.documentElement).appendChild(s);"
+            + "}catch(e){}})();";
+        try {
+            view.evaluateJavascript(js, null);
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** 把字符串转成安全的 JS 字面量（避免引号/换行破坏脚本） */
+    private String jsString(String s) {
+        StringBuilder sb = new StringBuilder("\"");
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"':  sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:
+                    if (c < 0x20) sb.append(String.format("\\u%04x", (int) c));
+                    else sb.append(c);
+            }
+        }
+        sb.append("\"");
+        return sb.toString();
     }
 
     private void showError(String msg) {

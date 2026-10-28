@@ -1,56 +1,47 @@
 package com.chaomi.app;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.util.concurrent.TimeUnit;
 
 /**
- * 轻量 HTTP 工具。
+ * 轻量 HTTP 工具（规则同步等场景复用）。
  *
- * 原先这些方法挂在 CrawlerApi 里，App 端采集移除后抽出为独立工具类，
- * 供规则同步、链接解析等场景复用。不引第三方库，保持 APK 体积。
+ * 走 Api 的共享 OkHttp 客户端：DNS 由 DoH 解析，
+ * 不受本地路由/运营商缓存过期 IP 的影响。
  */
 class Http {
 
     static String get(String u, String crawlerKey) throws Exception {
-        HttpURLConnection c = (HttpURLConnection) new URL(u).openConnection();
-        c.setRequestMethod("GET");
-        c.setConnectTimeout(15000);
-        c.setReadTimeout(20000);
-        c.setRequestProperty("User-Agent", "chaomi/1.0");
+        okhttp3.Request.Builder rb = new okhttp3.Request.Builder()
+                .url(u)
+                .header("User-Agent", "chaomi/1.0");
         if (crawlerKey != null && !crawlerKey.isEmpty()) {
-            c.setRequestProperty("X-Crawler-Key", crawlerKey);
+            rb.header("X-Crawler-Key", crawlerKey);
         }
-        return read(c);
+        return exec(rb.get().build());
     }
 
     static String postJson(String u, String body, String crawlerKey) throws Exception {
-        HttpURLConnection c = (HttpURLConnection) new URL(u).openConnection();
-        c.setDoOutput(true);
-        c.setRequestMethod("POST");
-        c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-        c.setConnectTimeout(15000);
-        c.setReadTimeout(30000);
+        okhttp3.Request.Builder rb = new okhttp3.Request.Builder()
+                .url(u)
+                .header("User-Agent", "chaomi/1.0")
+                .post(okhttp3.RequestBody.create(
+                        okhttp3.MediaType.parse("application/json; charset=utf-8"), body));
         if (crawlerKey != null && !crawlerKey.isEmpty()) {
-            c.setRequestProperty("X-Crawler-Key", crawlerKey);
+            rb.header("X-Crawler-Key", crawlerKey);
         }
-        OutputStream os = c.getOutputStream();
-        os.write(body.getBytes("UTF-8"));
-        os.close();
-        return read(c);
+        return exec(rb.build());
     }
 
-    private static String read(HttpURLConnection c) throws Exception {
-        int code = c.getResponseCode();
-        InputStream is = code >= 400 ? c.getErrorStream() : c.getInputStream();
-        if (is == null) return "";
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        byte[] buf = new byte[8192];
-        int n;
-        while ((n = is.read(buf)) > 0) bos.write(buf, 0, n);
-        is.close();
-        return bos.toString("UTF-8");
+    private static String exec(okhttp3.Request req) throws Exception {
+        okhttp3.OkHttpClient cl = Api.client().newBuilder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build();
+        okhttp3.Response r = cl.newCall(req).execute();
+        try {
+            return r.body() == null ? "" : r.body().string();
+        } finally {
+            r.close();
+        }
     }
 }
