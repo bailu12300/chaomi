@@ -1475,16 +1475,20 @@ const appDownloadPage = `<!doctype html>
 </style></head>
 <body><div class="card">
   <h1>超米</h1>
-  <div class="sub">硬件行情 · 图文社区 · 实时互动</div>
+  <div class="sub">资讯聚合 · 图文社区 · 实时互动</div>
   <a class="btn" href="/downloads/__APK__">⬇ 下载安卓 App（APK）</a>
   <div class="meta">版本 __VER__ · 原生应用 · 支持 Android 5.0 及以上</div>
+  <div class="meta">备用下载：<a href="https://github.com/bailu12300/chaomi/releases/latest"
+     style="color:#58a6ff">GitHub Releases</a></div>
   <div class="tip">安装提示：安卓默认禁止「未知来源」安装。下载后点击 APK，按提示允许「允许来自此来源的应用」即可安装。</div>
   <div class="tip" style="margin-top:10px">
     <b style="color:#e3b341">本版功能</b><br>
-    · <b>显卡行情</b>：Amazon 美国站 RTX 4060~5090 实时价，自动换算人民币<br>
-    · 图文社区：文字/图片/链接，公众号一键转原生文章<br>
-    · 账号体系：邮箱注册，发帖评论点赞记在名下<br>
-    · <b>净屏</b>：无障碍自动点掉开屏广告，支持导入第三方规则<br>
+    · <b>资讯</b>：数码 / AI / 能源 / 国际 / 科技，服务器定时抓取并翻译，断网也能看中文<br>
+    · <b>天气卡片</b>：按定位自动取当前城市，5 天预报<br>
+    · <b>图文社区</b>：富文本编辑（行内加粗/高亮/代码块/内嵌链接/引用旧文）<br>
+    · 公众号一键转原生文章，沉浸式阅读<br>
+    · 账号体系：邮箱注册，发帖评论点赞记在名下，显示 IP 归属地<br>
+    · <b>净屏</b>：无障碍自动点掉开屏广告，内置规则离线可用<br>
     · <b>节点</b>：实时延迟监控，每 3 秒心跳（20 次/分钟）<br>
     · 后台常驻：开机自启 + 定时自愈
   </div>
