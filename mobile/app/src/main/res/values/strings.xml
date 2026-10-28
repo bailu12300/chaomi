@@ -1,7 +1,6 @@
 <resources>
     <string name="app_name">超米</string>
     <string name="tab_feed">信息流</string>
-    <string name="tab_market">行情</string>
     <string name="hint_nickname">昵称（默认匿名）</string>
     <string name="hint_title">标题（可选）</string>
     <string name="hint_body">说点什么…</string>
@@ -19,4 +18,5 @@
     <string name="ad_skip_desc">识别开屏和弹窗上的「跳过 / 关闭」按钮并自动点击。只读取界面上的按钮文字，不上传任何屏幕内容。</string>
     <string name="theme_icon">◐</string>
     <string name="theme_title">主题</string>
+    <string name="action_post">发布</string>
 </resources>

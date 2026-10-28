@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """部署后端到 cm01：上传 + 备份 + 重启 + 验证"""
-import os, sys, paramiko
+import sys, time, paramiko
 
 HOST = os.environ.get("ZAOBA_HOST", "cm01.zy1080.xyz")
 PORT = int(os.environ.get("ZAOBA_PORT", "22"))

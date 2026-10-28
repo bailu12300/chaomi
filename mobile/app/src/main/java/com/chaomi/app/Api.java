@@ -298,42 +298,7 @@ public class Api {
         return gson.fromJson(gson.toJson(root.get("data")), Article.class);
     }
 
-    // ---------- Amazon 显卡行情 ----------
-
-    static class GpuList {
-        java.util.List<GpuModel> list = new java.util.ArrayList<>();
-        GpuFx fx = new GpuFx();
-    }
-
-    public static GpuList gpuList() throws Exception {
-        return gpuList("all");
-    }
-
-    public static GpuList gpuList(String kind) throws Exception {
-        String url = BASE + "/api/gpu/list";
-        if (kind != null && !kind.isEmpty() && !"all".equals(kind)) {
-            url += "?kind=" + URLEncoder.encode(kind, "UTF-8");
-        }
-        String json = get(url);
-        Map<String, Object> root = gson.fromJson(json, Map.class);
-        if (root == null) throw new Exception("空响应");
-        if (err(root) != null) throw new Exception(err(root));
-        GpuList out = new GpuList();
-        Object d = root.get("data");
-        if (!(d instanceof Map)) return out;
-        Map<String, Object> dm = (Map<String, Object>) d;
-        Object l = dm.get("list");
-        if (l != null) {
-            java.util.List<GpuModel> parsed = gson.fromJson(gson.toJson(l),
-                    new com.google.gson.reflect.TypeToken<java.util.List<GpuModel>>() {}.getType());
-            if (parsed != null) out.list = parsed;
-        }
-        Object f = dm.get("fx");
-        if (f instanceof Map) {
-            out.fx = gson.fromJson(gson.toJson(f), GpuFx.class);
-        }
-        return out;
-    }
+    // 行情接口已随行情模块移除（/api/gpu/* 服务端已下线）
 
     // ---------- 节点监控 ----------
 

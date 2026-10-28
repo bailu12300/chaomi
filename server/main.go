@@ -637,9 +637,9 @@ type serie struct {
 	Points []pt
 }
 
-// normCat 把各种写法的品类统一成 **与早八 App 完全一致** 的中文名。
+// normCat 把各种写法的品类统一成统一的中文名（行情已移除，此函数仅保留兼容）。
 //
-// ★ 口径必须与早八 App / hw_models.json 的 catLabel 完全一致：
+// ★ 口径必须与 hw_models.json 的 catLabel 一致：
 //     显卡 / 处理器 / 固态硬盘 / 内存条 / 笔记本
 //   历史上这里写的是「内存」（App 是「内存条」），且完全没有「笔记本」分支，
 //   导致笔记本数据全被归到兜底分类、页面上根本不出现笔记本 tab，
@@ -3003,7 +3003,7 @@ func doServe() error {
 	if err := migrateColumns(db); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
-	c := newCache()
+	_ = newCache() // 行情首页已移除，缓存对象保留占位避免大面积改动
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
@@ -3026,49 +3026,17 @@ func doServe() error {
 		w.Write(body)
 	})
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(assetDir))))
+	// 行情已移除：首页直接进社区
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" && r.URL.Path != "/index.html" {
 			http.NotFound(w, r)
 			return
 		}
-		page, err := c.getHome(db)
-		if err != nil {
-			log.Printf("[serve] ERROR: %v", err)
-			http.Error(w, "render error", 500)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Write([]byte(page))
+		http.Redirect(w, r, "/community", http.StatusFound)
 	})
-	mux.HandleFunc("/detail", func(w http.ResponseWriter, r *http.Request) {
-		k := r.URL.Query().Get("k")
-		page, found, err := buildDetail(db, k)
-		if err != nil {
-			log.Printf("[serve] detail ERROR: %v", err)
-			http.Error(w, "render error", 500)
-			return
-		}
-		if !found {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(page))
-	})
-	mux.HandleFunc("/scatter", func(w http.ResponseWriter, r *http.Request) {
-		page, err := buildScatter(db)
-		if err != nil {
-			log.Printf("[serve] scatter ERROR: %v", err)
-			http.Error(w, "render error", 500)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Write([]byte(page))
-	})
+	// 行情详情 / 散点图已移除（页面不再提供）
 
-	// ---- 社区模块（在现有 早八 上编译兼容迭代）----
+	// ---- 社区模块 ----
 	if err := ensureCommunitySchema(db); err != nil {
 		log.Printf("[serve] community schema: %v", err)
 	}
@@ -3089,26 +3057,10 @@ func doServe() error {
 	if err := ensureGPUSchema(db); err != nil {
 		log.Printf("[serve] cloud_gpu schema: %v", err)
 	} else {
-		startGPULoop(db)
-		log.Printf("[serve] GPU 价格采集已启动（零售卡 + 云 GPU，每 2 小时一轮）")
+		// 行情已移除：不再启动 GPU 采集
+		log.Printf("[serve] GPU 采集已停用（行情模块移除）")
 	}
 	go hub.run()
-	mux.HandleFunc("/api/hw/models", func(w http.ResponseWriter, r *http.Request) { handleHWModels(db, w, r) })
-	mux.HandleFunc("/api/hw/status", func(w http.ResponseWriter, r *http.Request) { handleHWStatus(db, w, r) })
-	mux.HandleFunc("/api/hw/cats", func(w http.ResponseWriter, r *http.Request) { handleHWCatLabels(db, w, r) })
-	mux.HandleFunc("/api/hw/movers", func(w http.ResponseWriter, r *http.Request) { handleHWMovers(db, w, r) })
-	mux.HandleFunc("/api/hw/spark/", func(w http.ResponseWriter, r *http.Request) {
-		key := strings.TrimPrefix(r.URL.Path, "/api/hw/spark/")
-		writeJSON(w, 200, map[string]interface{}{"code": 0, "data": hwSpark(db, key, 24)})
-	})
-	mux.HandleFunc("/api/hw/history/", func(w http.ResponseWriter, r *http.Request) {
-		key := strings.TrimPrefix(r.URL.Path, "/api/hw/history/")
-		if key == "" {
-			http.NotFound(w, r)
-			return
-		}
-		handleHWHistory(db, w, r, key)
-	})
 	mux.HandleFunc("/api/community/feed", func(w http.ResponseWriter, r *http.Request) { handleCommunityFeed(db, w, r) })
 	mux.HandleFunc("/api/community/posts", func(w http.ResponseWriter, r *http.Request) { handleCommunityCreatePost(db, w, r) })
 	mux.HandleFunc("/api/community/post/", func(w http.ResponseWriter, r *http.Request) {
@@ -3132,10 +3084,7 @@ func doServe() error {
 	// ---- 链接卡片 ----
 	mux.HandleFunc("/api/link/preview", handleLinkPreview)
 
-	// ---- 云 GPU 价格（VoltageGPU）----
-	mux.HandleFunc("/api/gpu/list", func(w http.ResponseWriter, r *http.Request) { handleGPUList(db, w, r) })
-	mux.HandleFunc("/api/gpu/history", func(w http.ResponseWriter, r *http.Request) { handleGPUHistory(db, w, r) })
-	mux.HandleFunc("/api/gpu/collect", func(w http.ResponseWriter, r *http.Request) { handleGPURefresh(db, w, r) })
+	// ---- 行情 API 已移除（保留函数不挂路由）----
 
 	// ---- 去广告规则库（服务端下发，客户端执行）----
 	mux.HandleFunc("/api/adrules", func(w http.ResponseWriter, r *http.Request) { handleAdRules(db, w, r) })
@@ -3144,7 +3093,6 @@ func doServe() error {
 
 	// ---- 采集端（App 回传）----
 	mux.HandleFunc("/api/crawler/targets", func(w http.ResponseWriter, r *http.Request) { handleCrawlerTargets(db, w, r) })
-	mux.HandleFunc("/api/hw/ingest", func(w http.ResponseWriter, r *http.Request) { handleHWCrawlerIngest(db, w, r) })
 
 	// ---- 节点监控 ----
 	mux.HandleFunc("/api/ping", handlePing)

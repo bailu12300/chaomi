@@ -37,7 +37,7 @@ public class CommentAdapter extends RecyclerView.Adapter<CommentAdapter.VH> {
     public void onBindViewHolder(@NonNull VH h, int pos) {
         Comment c = comments.get(pos);
         h.author.setText(c.author == null ? "匿名" : c.author);
-        h.time.setText(Utils.formatTime(c.createdAt));
+        h.time.setText(Utils.metaLine(c.createdAt, c.ipLoc));
         h.body.setText(c.body);
         // 只有自己的评论才显示删除
         h.del.setVisibility(c.mine ? View.VISIBLE : View.GONE);

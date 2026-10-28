@@ -231,11 +231,38 @@ class SkipRule {
     }
 
     /** 包名匹配：支持精确、通配后缀 com.xxx.* */
+    /**
+     * 包名匹配。
+     * 支持三种写法（导入的第三方规则里都常见）：
+     *   1. 精确包名          com.example.app
+     *   2. 通配前缀          com.example.*        /  *
+     *   3. 管道分隔多包名    a.com|b.com|c.com
+     *
+     * ★ 之前只处理了 1 和 2，导致内置里用 `|` 写的多包名规则永远不命中，
+     *   等于这些规则完全失效。
+     */
     boolean matchPackage(String p) {
         if (p == null || pkg == null) return false;
-        if (pkg.equals(p)) return true;
-        if (pkg.endsWith(".*")) {
-            return p.startsWith(pkg.substring(0, pkg.length() - 1));
+        if (pkg.equals("*")) return true;
+
+        // 管道分隔：任意一个子模式命中即可
+        if (pkg.indexOf('|') >= 0) {
+            for (String part : pkg.split("\\|")) {
+                String s = part.trim();
+                if (s.isEmpty()) continue;
+                if (matchOne(p, s)) return true;
+            }
+            return false;
+        }
+        return matchOne(p, pkg.trim());
+    }
+
+    private static boolean matchOne(String p, String pat) {
+        if (pat.isEmpty()) return false;
+        if (pat.equals("*")) return true;
+        if (pat.equals(p)) return true;
+        if (pat.endsWith("*")) {
+            return p.startsWith(pat.substring(0, pat.length() - 1));
         }
         return false;
     }

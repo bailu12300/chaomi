@@ -22,6 +22,7 @@ class Post {
     boolean liked;
     int views;
     int commentCount;
+    String ipLoc;      // IP 归属地（省市，如「广东」）
     long createdAt;
 }
 
@@ -32,6 +33,7 @@ class Comment {
     long userId;
     String author;
     String body;
+    String ipLoc;     // IP 归属地
     long createdAt;
     boolean mine;
 }
@@ -45,10 +47,11 @@ class PostAndComments {
 
 /** 文章原生块：客户端据此原生渲染，不依赖 WebView */
 class Block {
-    String type;   // p | h2 | h3 | img | quote | code | li | topic
+    String type;   // p | h2 | h3 | img | quote | code | li | ol | video | hr | topic | link
     String text;
     String src;
-    String alt;
+    String alt;    // img 图注 / video 封面
+    String style;  // 对齐等附加样式：center | （空=默认左对齐）
 }
 
 /** 公众号图文解析结果 */
@@ -75,42 +78,6 @@ class Article {
 }
 
 /** 显卡行情：零售卡（Amazon）与云 GPU（VoltageGPU）统一模型 */
-class GpuModel {
-    String key;
-    String kind;         // retail | cloud
-    String kindLabel;    // 零售卡 | 云GPU
-    String model;        // 4060 / 5070 Ti / 5090
-    String modelFull;    // RTX 5070 Ti
-    String spec;
-    String title;
-    double priceUsd;
-    double priceCny;
-    double fxRate;
-    String unit;         // USD/张 或 USD/GPU/小时
-    double msrpUsd;      // 官方指导价（云 GPU 为 0）
-    double deviation;    // 与 MSRP 偏离百分比
-    boolean disputed;    // 价格有争议
-    String disputeReason;
-    String source;       // Amazon | VoltageGPU
-    String buyUrl;
-    String sourceUrl;
-    String extra;        // 云 GPU 的库存说明等
-    String availability;
-    String image;
-    long updatedAt;
-
-    boolean isCloud() { return "cloud".equals(kind); }
-    boolean isRetail() { return "retail".equals(kind); }
-}
-
-/** 汇率信息 */
-class GpuFx {
-    double rate;
-    long at;
-    String pair;
-}
-
-/** 链接卡片（服务端解析 OG 后的结果） */
 class LinkCard {
     String url;
     String title;

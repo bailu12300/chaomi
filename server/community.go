@@ -1,6 +1,6 @@
 package main
 
-// ---------------- 社区模块（在现有 早八 上编译兼容迭代） ----------------
+// ---------------- 社区模块 ----------------
 // 新增：文字/图片/链接/公众号图文 帖子、信息流、评论、点赞、WebSocket 实时、
 //       公众号图文解析、硬件行情复用（/api/hw/models / /api/hw/status）。
 
@@ -51,6 +51,7 @@ type CPost struct {
 	Liked        bool     `json:"liked,omitempty"`
 	Views        int      `json:"views,omitempty"`
 	CommentCount int      `json:"commentCount"`
+	IPLoc        string   `json:"ipLoc,omitempty"` // IP 归属地（只存省市，不存完整 IP）
 	CreatedAt    int64    `json:"createdAt"`
 }
 
@@ -61,6 +62,7 @@ type CComment struct {
 	Author    string `json:"author"`
 	Body      string `json:"body"`
 	CreatedAt int64  `json:"createdAt"`
+	IPLoc     string `json:"ipLoc,omitempty"` // IP 归属地（只存省市，不存完整 IP）
 	Mine      bool   `json:"mine,omitempty"`
 }
 
@@ -99,10 +101,6 @@ func ensureCommunitySchema(db *sql.DB) error {
 			INDEX idx_cposts_ct(created_at),
 			INDEX idx_cposts_uid(user_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		// 老表补字段（MySQL 没有 ADD COLUMN IF NOT EXISTS，用错误忽略兜底）
-		`ALTER TABLE c_posts ADD COLUMN account_name VARCHAR(128) DEFAULT ''`,
-		`ALTER TABLE c_posts ADD COLUMN account_avatar VARCHAR(512) DEFAULT ''`,
-		`ALTER TABLE c_posts ADD COLUMN publish_time BIGINT DEFAULT 0`,
 		`CREATE TABLE IF NOT EXISTS c_comments(
 			id BIGINT AUTO_INCREMENT PRIMARY KEY,
 			post_id BIGINT NOT NULL,
@@ -123,7 +121,11 @@ func ensureCommunitySchema(db *sql.DB) error {
 		{"c_posts", "blocks", "blocks MEDIUMTEXT"},
 		{"c_posts", "user_id", "user_id BIGINT DEFAULT 0"},
 		{"c_posts", "views", "views INT DEFAULT 0"},
+		{"c_posts", "ip_loc", "ip_loc VARCHAR(32) DEFAULT ''"},
+		{"c_posts", "ip", "ip VARCHAR(64) DEFAULT ''"},
 		{"c_comments", "user_id", "user_id BIGINT DEFAULT 0"},
+		{"c_comments", "ip_loc", "ip_loc VARCHAR(32) DEFAULT ''"},
+		{"c_comments", "ip", "ip VARCHAR(64) DEFAULT ''"},
 	} {
 		if err := cAddColumn(db, c[0], c[1], c[2]); err != nil {
 			return err
@@ -133,21 +135,22 @@ func ensureCommunitySchema(db *sql.DB) error {
 }
 
 // cPostColumns 统一的帖子列清单，保证各处扫描顺序一致
-const cPostColumns = `id,user_id,type,title,body,cover,url,images,blocks,author,tags,account_name,account_avatar,publish_time,likes,views,created_at`
+const cPostColumns = `id,user_id,type,title,body,cover,url,images,blocks,author,tags,account_name,account_avatar,publish_time,likes,views,ip_loc,created_at`
 
 func cScanPost(scan func(...interface{}) error) (CPost, error) {
 	var p CPost
 	var images, tags, blocks sql.NullString
 	var created int64
-	var accName, accAvatar sql.NullString
+	var accName, accAvatar, ipLoc sql.NullString
 	var pubTime sql.NullInt64
 	err := scan(&p.ID, &p.UserID, &p.Type, &p.Title, &p.Body, &p.Cover, &p.URL,
 		&images, &blocks, &p.Author, &tags, &accName, &accAvatar, &pubTime,
-		&p.Likes, &p.Views, &created)
+		&p.Likes, &p.Views, &ipLoc, &created)
 	if err != nil {
 		return p, err
 	}
 	p.CreatedAt = created
+	p.IPLoc = ipLoc.String
 	p.AccountName = accName.String
 	p.AccountAvatar = accAvatar.String
 	p.PublishTime = pubTime.Int64
@@ -173,10 +176,10 @@ func cCreatePost(db *sql.DB, p CPost) (CPost, error) {
 	}
 	res, err := db.Exec(
 		`INSERT INTO c_posts(user_id,type,title,body,cover,url,images,blocks,author,tags,
-			account_name,account_avatar,publish_time,created_at)
-		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			account_name,account_avatar,publish_time,ip_loc,created_at)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		p.UserID, p.Type, p.Title, p.Body, p.Cover, p.URL, string(imgs), blk, p.Author,
-		string(tags), p.AccountName, p.AccountAvatar, p.PublishTime, p.CreatedAt)
+		string(tags), p.AccountName, p.AccountAvatar, p.PublishTime, p.IPLoc, p.CreatedAt)
 	if err != nil {
 		return p, err
 	}
@@ -210,8 +213,8 @@ func cCommentCount(db *sql.DB, postID int64) int {
 
 func cAddComment(db *sql.DB, postID int64, c CComment) (CComment, error) {
 	res, err := db.Exec(
-		`INSERT INTO c_comments(post_id,user_id,author,body,created_at) VALUES(?,?,?,?,?)`,
-		postID, c.UserID, c.Author, c.Body, c.CreatedAt)
+		`INSERT INTO c_comments(post_id,user_id,author,body,created_at,ip_loc) VALUES(?,?,?,?,?,?)`,
+		postID, c.UserID, c.Author, c.Body, c.CreatedAt, c.IPLoc)
 	if err != nil {
 		return c, err
 	}
@@ -222,7 +225,7 @@ func cAddComment(db *sql.DB, postID int64, c CComment) (CComment, error) {
 
 func cListComments(db *sql.DB, postID int64) ([]CComment, error) {
 	rows, err := db.Query(
-		`SELECT id,post_id,user_id,author,body,created_at FROM c_comments WHERE post_id=? ORDER BY created_at ASC`,
+		`SELECT id,post_id,user_id,author,body,created_at,ip_loc FROM c_comments WHERE post_id=? ORDER BY created_at ASC`,
 		postID)
 	if err != nil {
 		return nil, err
@@ -231,12 +234,28 @@ func cListComments(db *sql.DB, postID int64) ([]CComment, error) {
 	var out []CComment
 	for rows.Next() {
 		var c CComment
-		if err := rows.Scan(&c.ID, &c.PostID, &c.UserID, &c.Author, &c.Body, &c.CreatedAt); err != nil {
+		var ipLoc sql.NullString
+		if err := rows.Scan(&c.ID, &c.PostID, &c.UserID, &c.Author, &c.Body, &c.CreatedAt, &ipLoc); err != nil {
 			continue
+		}
+		c.IPLoc = ipLoc.String
+		// 老数据没有归属地：尝试用缓存的 IP 补，补不到就留空
+		if c.IPLoc == "" {
+			c.IPLoc = ipLocationByCommentID(db, c.ID)
 		}
 		out = append(out, c)
 	}
 	return out, nil
+}
+
+// 老评论补归属地：从 reg_ip 之类的原始 IP 反查（仅当曾经记录过）
+func ipLocationByCommentID(db *sql.DB, id int64) string {
+	var ip sql.NullString
+	_ = db.QueryRow(`SELECT ip FROM c_comments WHERE id=?`, id).Scan(&ip)
+	if !ip.Valid || ip.String == "" {
+		return ""
+	}
+	return ipLocation(ip.String)
 }
 
 func cLikePost(db *sql.DB, id int64) (int, error) {
@@ -250,7 +269,7 @@ func cLikePost(db *sql.DB, id int64) (int, error) {
 }
 
 // ===== 硬件行情复用（基于现有 jd_latest / jd_rounds / price_history） =====
-// 融合目标：社区 App 内直接获得 早八 的全部行情能力（品类、搜索、排序、涨跌榜、单型号走势）。
+// 行情能力已移除，社区只保留图文内容。
 
 // hwItem 行情条目：列表 / 涨跌榜 / 详情共用同一结构
 type hwItem struct {
@@ -947,6 +966,10 @@ func handleCommunityCreatePost(db *sql.DB, w http.ResponseWriter, r *http.Reques
 		p.Type = "text"
 	}
 	p.Author = cAuthorName(u, p.Author)
+	// IP 归属地：只记省市用于展示，完整 IP 不对外暴露
+	if cip := clientIP(r); cip != "" {
+		p.IPLoc = ipLocation(cip)
+	}
 	p.Body = strings.TrimSpace(p.Body)
 	p.Title = strings.TrimSpace(p.Title)
 	if p.Body == "" && p.Title == "" && p.URL == "" && len(p.Images) == 0 && len(p.Blocks) == 0 {
@@ -1052,6 +1075,9 @@ func handleCommunityPost(db *sql.DB, w http.ResponseWriter, r *http.Request, id 
 			return
 		}
 		c.CreatedAt = time.Now().UnixMilli()
+		if cip := clientIP(r); cip != "" {
+			c.IPLoc = ipLocation(cip)
+		}
 		saved, err := cAddComment(db, id, c)
 		if err != nil {
 			writeJSON(w, 500, map[string]string{"error": err.Error()})
@@ -1465,7 +1491,7 @@ const appDownloadPage = `<!doctype html>
   <details>
     <summary>装不上？点这里看排查步骤</summary>
     <ol>
-      <li><b>如果之前装过「早八社区」</b>：那个是旧包名（<code>com.zaoba.community</code>），和现在的「超米」（<code>com.chaomi.app</code>）是两个独立应用，<b>可以同时存在，不用卸载</b>。想清理的话手动卸载旧版即可。</li>
+      <li><b>安装提示</b>：超米使用独立包名 <code>com.chaomi.app</code>，与其它同名应用互不影响，<b>可以直接安装</b>。</li>
       <li><b>提示「解析软件包时出现问题」</b>：多半是下载不完整或被浏览器改名。请用系统浏览器下载，别用微信/QQ 内置浏览器直接打开安装。</li>
       <li><b>华为 / 荣耀</b>：设置 → 系统和更新 → 纯净模式 → 关闭；或在「应用管控中心」里放行。</li>
       <li><b>小米 / Redmi</b>：设置 → 应用设置 → 应用管理 → 右上角 → 特殊权限 → 安装未知应用 → 允许浏览器。</li>
@@ -1513,7 +1539,7 @@ func latestAPK() (name, version string) {
 func handleAppDownloadPage(w http.ResponseWriter, r *http.Request) {
 	name, ver := latestAPK()
 	if name == "" {
-		name = "zaoba-community-native-v1.2.0.apk"
+		name = "chaomi-v1.0.0.apk"
 		ver = "1.2.0"
 	}
 	html := strings.Replace(appDownloadPage, "__APK__", name, 1)

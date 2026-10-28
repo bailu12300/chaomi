@@ -29,7 +29,7 @@ EXPECT_CN = "CN=Chaomi"
 OUTDIR = "D:/zaoba-community/android/app/build/outputs/apk/release"
 PREFIX = "chaomi"
 
-ver = sys.argv[1] if len(sys.argv) > 1 else "2.0.0"
+ver = sys.argv[1] if len(sys.argv) > 1 else "4.0.0"
 unsigned = OUTDIR + "/app-release-unsigned.apk"
 aligned = OUTDIR + "/app-release-aligned.apk"
 final = OUTDIR + "/%s-v%s.apk" % (PREFIX, ver)

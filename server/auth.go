@@ -41,10 +41,11 @@ type CUser struct {
 
 // CBlock 文章原生块：客户端据此渲染，不依赖 WebView
 type CBlock struct {
-	Type string `json:"type"`           // p | h2 | h3 | img | quote | code | li | video | hr
-	Text string `json:"text,omitempty"` // 文本内容（video 时存类型标记）
-	Src  string `json:"src,omitempty"`  // img / video 地址
-	Alt  string `json:"alt,omitempty"`  // img 描述 / video 封面
+	Type  string `json:"type"`            // p | h2 | h3 | img | quote | code | li | ol | video | hr | topic | link
+	Text  string `json:"text,omitempty"`  // 文本内容（video 时存类型标记）
+	Src   string `json:"src,omitempty"`   // img / video 地址
+	Alt   string `json:"alt,omitempty"`   // img 图注 / video 封面
+	Style string `json:"style,omitempty"` // center = 居中，空 = 默认左对齐
 }
 
 // ===== 建表（幂等，可反复执行） =====
@@ -187,7 +188,7 @@ func cAuthUser(db *sql.DB, r *http.Request) *CUser {
 		tok = r.URL.Query().Get("token")
 	}
 	if tok == "" {
-		if c, err := r.Cookie("zaoba_token"); err == nil {
+		if c, err := r.Cookie("chaomi_token"); err == nil {
 			tok = c.Value
 		}
 	}

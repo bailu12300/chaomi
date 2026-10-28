@@ -21,11 +21,20 @@ class RuleStore {
     private static final String P = "chaomi_rules";
     private static final String K_RULES = "list";
     private static final String K_URLS = "sources";
+    private static final String K_BUILTIN_VER = "builtinVer";
+
+    /**
+     * 内置规则版本。改了 builtin() 里的内容就 +1，
+     * 已安装的老用户下次启动会自动用新内置规则覆盖旧的同名规则。
+     * （离线可用的核心：所有内置规则都打包在 APK 里，不依赖服务器）
+     */
+    private static final int BUILTIN_VERSION = 2;
 
     private static final Gson GSON = new Gson();
 
     // ---------- 内置规则 ----------
-    // 只放最常见、逻辑明确的开屏广告。用户可禁用。
+    // ★ 全部打包在 APK 内，断网也有完整效果（服务器同步只是增量补充，失败不影响）。
+    // 用户可逐条禁用。
     static List<SkipRule> builtin() {
         List<SkipRule> out = new ArrayList<>();
 
@@ -34,8 +43,8 @@ class RuleStore {
                 new String[]{"跳过", "跳过广告", "跳过此广告", "跳过开屏", "skip", "skip ad"},
                 null));
 
-        // 通用：纯符号关闭
-        out.add(make("通用 · 关闭符号 ×", "*",
+        // 通用：纯符号关闭（不含字母 x/X，避免计算器等被误点）
+        out.add(make("通用 · 关闭符号", "*",
                 new String[]{"×", "✕", "✖", "╳", "✗", "⨯", "❌", "❎"},
                 null));
 
@@ -45,10 +54,43 @@ class RuleStore {
                         "残忍拒绝", "放弃更新", "不同意", "取消", "关闭"},
                 null));
 
-        // 视频类 App 的片头广告
-        out.add(make("视频 · 跳过片头", "com.qiyi.video|com.tencent.qqlive|"
-                        + "com.youku.phone|tv.danmaku.bili|com.hunantv.imgo.activity",
+        // ---- 视频类：片头广告 ----
+        out.add(make("视频 · 跳过片头",
+                "com.qiyi.video|com.tencent.qqlive|com.youku.phone|"
+                        + "tv.danmaku.bili|com.hunantv.imgo.activity|com.ss.android.ugc.aweme|"
+                        + "com.smile.gifmaker|com.kuaishou.nebula|com.tencent.weishi",
                 new String[]{"跳过片头", "跳过广告", "跳过", "关闭广告"},
+                null));
+
+        // ---- 电商：开屏 + 弹窗 ----
+        out.add(make("电商 · 开屏",
+                "com.taobao.taobao|com.tmall.wireless|com.jingdong.app.mall|"
+                        + "com.xunmeng.pinduoduo|com.achievo.vipshop|com.suning.mobile.ebuy|"
+                        + "com.kaola|com.alibaba.aliexpresshd",
+                new String[]{"跳过", "跳过广告", "关闭", "×", "✕", "我知道了"},
+                null));
+
+        // ---- 生活服务 / 出行 ----
+        out.add(make("生活 · 开屏",
+                "com.sankuai.meituan|com.meituan.retail.v.android|me.ele|"
+                        + "com.dianping.v1|com.taobao.trip|com.MobileTicket|ctrip.android.view|"
+                        + "com.sdu.didi.psnger|com.alibaba.android.rimet",
+                new String[]{"跳过", "跳过广告", "关闭", "×", "✕"},
+                null));
+
+        // ---- 社交 / 资讯 ----
+        out.add(make("社交 · 开屏",
+                "com.sina.weibo|com.tencent.mm|com.tencent.mobileqq|"
+                        + "com.xingin.xhs|com.zhihu.android|com.netease.newsreader.activity|"
+                        + "com.ss.android.article.news|com.tencent.news|com.sohu.newsclient",
+                new String[]{"跳过", "跳过广告", "关闭", "×", "✕"},
+                null));
+
+        // ---- 工具 / 浏览器（广告弹窗多）----
+        out.add(make("工具 · 网页弹窗",
+                "com.android.chrome|com.tencent.mtt|com.UCMobile|com.baidu.searchbox|"
+                        + "com.quark.browser|org.mozilla.firefox|com.microsoft.emmx",
+                new String[]{"关闭", "×", "✕", "我知道了", "以后再说", "取消"},
                 null));
 
         return out;
@@ -82,15 +124,29 @@ class RuleStore {
         Set<String> ids = new LinkedHashSet<>();
         for (SkipRule r : stored) ids.add(r.id);
 
-        // 内置规则若不存在则补进去
+        // 内置规则升级：版本变了就用新的内置内容覆盖同名规则（保留用户启停状态）
+        int localBuiltinVer = sp(c).getInt(K_BUILTIN_VER, 0);
+        boolean upgrade = localBuiltinVer < BUILTIN_VERSION;
+
         boolean changed = false;
         for (SkipRule b : builtin()) {
             if (!ids.contains(b.id)) {
                 out.add(b);
                 changed = true;
+            } else if (upgrade) {
+                for (int i = 0; i < out.size(); i++) {
+                    SkipRule old = out.get(i);
+                    if (old.id != null && old.id.equals(b.id)) {
+                        b.enabled = old.enabled;   // 保留用户是否启用
+                        out.set(i, b);
+                        changed = true;
+                        break;
+                    }
+                }
             }
         }
         if (changed) save(c, out);
+        if (upgrade) sp(c).edit().putInt(K_BUILTIN_VER, BUILTIN_VERSION).apply();
         return out;
     }
 

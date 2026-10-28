@@ -20,39 +20,23 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="8dp"
-        android:gravity="center">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/tabFeed"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/tab_feed"
-            android:textColor="@color/chaomi_text" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/tabMarket"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:text="@string/tab_market"
-            android:textColor="@color/chaomi_text_dim" />
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="4dp"
+        android:gravity="center_vertical">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAccount"
             style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="2dp"
+            android:layout_weight="1"
             android:insetLeft="0dp"
             android:insetRight="0dp"
+            android:gravity="start|center_vertical"
             android:text="登录"
             android:textColor="@color/chaomi_accent"
-            android:textSize="12sp" />
+            android:textSize="13sp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnNode"
@@ -62,8 +46,8 @@
             android:insetLeft="0dp"
             android:insetRight="0dp"
             android:minWidth="0dp"
-            android:paddingStart="6dp"
-            android:paddingEnd="6dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
             android:text="节点"
             android:textColor="@color/chaomi_text_dim"
             android:textSize="12sp" />
@@ -76,8 +60,8 @@
             android:insetLeft="0dp"
             android:insetRight="0dp"
             android:minWidth="0dp"
-            android:paddingStart="6dp"
-            android:paddingEnd="6dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
             android:text="净屏"
             android:textColor="@color/chaomi_text_dim"
             android:textSize="12sp" />
@@ -88,7 +72,7 @@
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <!-- ===== 信息流 ===== -->
+        <!-- ===== 信息流（唯一主视图）===== -->
         <LinearLayout
             android:id="@+id/feedPane"
             android:layout_width="match_parent"
@@ -214,190 +198,15 @@
                     android:clipToPadding="false" />
             </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
         </LinearLayout>
-
-        <!-- ===== 硬件行情 ===== -->
-        <LinearLayout
-            android:id="@+id/marketPane"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <EditText
-                android:id="@+id/hwSearch"
-                android:layout_width="match_parent"
-                android:layout_height="44dp"
-                android:layout_marginStart="10dp"
-                android:layout_marginEnd="10dp"
-                android:layout_marginTop="2dp"
-                android:background="@color/chaomi_surface_2"
-                android:hint="搜型号，如 5070、5090"
-                android:imeOptions="actionSearch"
-                android:inputType="text"
-                android:maxLines="1"
-                android:paddingStart="14dp"
-                android:paddingEnd="14dp"
-                android:singleLine="true"
-                android:textColor="@color/chaomi_text"
-                android:textColorHint="@color/chaomi_text_dim"
-                android:textSize="14sp" />
-
-            <HorizontalScrollView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
-                android:scrollbars="none">
-
-                <LinearLayout
-                    android:id="@+id/gpuFilterRow"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="32dp"
-                        android:layout_marginEnd="8dp"
-                        android:background="@color/chaomi_surface_2"
-                        android:gravity="center"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
-                        android:tag="all"
-                        android:text="全部"
-                        android:textColor="@color/chaomi_accent"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="32dp"
-                        android:layout_marginEnd="8dp"
-                        android:background="@color/chaomi_surface_2"
-                        android:gravity="center"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
-                        android:tag="retail"
-                        android:text="零售卡"
-                        android:textColor="@color/chaomi_text_dim"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="32dp"
-                        android:layout_marginEnd="8dp"
-                        android:background="@color/chaomi_surface_2"
-                        android:gravity="center"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
-                        android:tag="cloud"
-                        android:text="云GPU"
-                        android:textColor="@color/chaomi_text_dim"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="32dp"
-                        android:background="@color/chaomi_surface_2"
-                        android:gravity="center"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
-                        android:tag="disputed"
-                        android:text="有争议"
-                        android:textColor="@color/chaomi_text_dim"
-                        android:textSize="12sp" />
-                </LinearLayout>
-            </HorizontalScrollView>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
-                android:orientation="horizontal">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/sortLatest"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:text="最新"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/sortPriceAsc"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:text="价格低"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/sortPriceDesc"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:text="价格高"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/sortChange"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:text="涨跌榜"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/marketHint"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingStart="14dp"
-                android:paddingEnd="14dp"
-                android:paddingTop="2dp"
-                android:paddingBottom="4dp"
-                android:textColor="@color/chaomi_text_dim"
-                android:textSize="11sp" />
-
-            <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-                android:id="@+id/marketSwipe"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1">
-
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/market"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:padding="8dp"
-                    android:clipToPadding="false" />
-            </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-        </LinearLayout>
-
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/fab"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom|end"
-            android:layout_margin="16dp"
-            android:src="@android:drawable/ic_input_add"
-            app:backgroundTint="@color/chaomi_accent"
-            app:tint="#ffffff"
-            android:contentDescription="发布" />
     </FrameLayout>
 
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|bottom"
+        android:layout_margin="18dp"
+        android:contentDescription="@string/action_post"
+        app:srcCompat="@android:drawable/ic_input_add"
+        app:tint="@color/chaomi_bg" />
 </LinearLayout>

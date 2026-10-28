@@ -16,6 +16,18 @@ class Utils {
         return sdf.format(new Date(ms));
     }
 
+    /**
+     * 作者行下方的元信息：「广东 · 3 小时前」
+     * 归属地缺失时只显示时间，不显示占位的「未知」，避免看起来像出错。
+     */
+    static String metaLine(long ms, String ipLoc) {
+        String t = formatTime(ms);
+        String loc = ipLoc == null ? "" : ipLoc.trim();
+        if (loc.isEmpty()) return t;
+        if (t.isEmpty()) return loc;
+        return loc + " · " + t;
+    }
+
     /** 把后端返回的相对路径拼成完整 URL */
     static String fullUrl(String u) {
         if (u == null) return null;

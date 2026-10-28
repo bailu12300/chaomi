@@ -106,6 +106,9 @@ public class SkipAdService extends AccessibilityService {
         }
         if (AdSkipPrefs.whitelist(this).contains(pkg)) return;
 
+        // ★ 工具类 App 绝不自动点击（计算器 ×、输入法按键、设置开关都不该被碰）
+        if (isToolApp(pkg, lastActivity)) return;
+
         long now = System.currentTimeMillis();
         if (pkg.equals(lastPkg) && now - lastClickAt < DEBOUNCE_MS) return;
 
@@ -330,6 +333,9 @@ public class SkipAdService extends AccessibilityService {
             Rect r = new Rect();
             (target != null ? target : n).getBoundsInScreen(r);
             if (!plausible(r)) continue;
+            // 纯符号（× ✕ 等）额外要求是小控件：广告的关闭叉很小，
+            // 计算器乘号 / 播放器按钮 / 大号图标都远大于 52dp
+            if (isCloseSymbol(textOf(n)) && !smallSymbolNode(r)) continue;
 
             // 方式一：直接 ACTION_CLICK
             boolean ok = false;
@@ -415,16 +421,51 @@ public class SkipAdService extends AccessibilityService {
      * 关键词匹配：核心文本必须"整体就是这个按钮"。
      * 覆盖常见写法：跳过 5s / 5s跳过 / 跳过广告 / 跳过公告 / 关闭广告 / skip ad 等。
      */
-    /** 纯符号按钮（× ✕ ✖ 等），这类没有文字，必须单独识别 */
+    /**
+     * 纯符号按钮（× ✕ ✖ 等），这类没有文字，必须单独识别。
+     *
+     * ★ 绝不含字母 x / X：计算器的乘号键、输入法的 x 键、正文里的小写 x
+     *   都会命中，导致在计算器/键盘里乱点。只认真正的排版符号。
+     */
     private static boolean isCloseSymbol(String s) {
         if (s == null) return false;
         String t = s.trim();
         if (t.isEmpty() || t.length() > 2) return false;
         for (int i = 0; i < t.length(); i++) {
             char c = t.charAt(i);
-            if ("×✕✖╳✗⨯❌❎xX╳╳".indexOf(c) < 0) return false;
+            if ("×✕✖╳✗⨯❌❎".indexOf(c) < 0) return false;
         }
         return true;
+    }
+
+    /**
+     * 工具类 App 一律不自动点击。
+     * 计算器 / 输入法 / 设置 / 文件管理 / 相机 等界面上的 × 和数字键
+     * 不是广告，点了是纯粹的破坏。
+     */
+    private static boolean isToolApp(String pkg, String activity) {
+        if (pkg == null) return false;
+        String s = pkg.toLowerCase();
+        String a = activity == null ? "" : activity.toLowerCase();
+
+        // 计算器
+        if (s.contains("calculator") || s.contains(".calc") || a.contains("calculator")) return true;
+        // 输入法 / 键盘
+        if (s.contains("inputmethod") || s.contains("keyboard") || s.contains("pinyin")
+                || s.endsWith(".ime") || s.contains(".ime.") || a.contains("inputmethod")) return true;
+        // 系统工具
+        if (s.contains("settings") || s.contains("filemanager") || s.contains("deskclock")
+                || s.contains("calendar") || s.contains("contacts") || s.contains("mms")
+                || s.contains("camera") || s.contains("gallery") || s.contains("soundrecorder")) return true;
+        return false;
+    }
+
+    /** 纯符号按钮必须是"小控件"，排除大号 UI 按键（计算器数字/乘号普遍 ≥ 60dp） */
+    private boolean smallSymbolNode(Rect r) {
+        if (r.width() <= 0 || r.height() <= 0) return false;
+        float d = getResources().getDisplayMetrics().density;
+        int maxPx = (int) (52 * d);   // 52dp 以内才算"关闭小叉"
+        return r.width() <= maxPx && r.height() <= maxPx;
     }
 
     private boolean matchWord(String s, Set<String> words) {

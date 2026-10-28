@@ -43,7 +43,7 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.VH> {
         Post p = posts.get(pos);
         h.typeChip.setText(typeLabel(p.type));
         h.author.setText(p.author == null ? "匿名" : p.author);
-        h.time.setText(Utils.formatTime(p.createdAt));
+        h.time.setText(Utils.metaLine(p.createdAt, p.ipLoc));
 
         if (p.title != null && !p.title.isEmpty()) {
             h.title.setVisibility(View.VISIBLE);

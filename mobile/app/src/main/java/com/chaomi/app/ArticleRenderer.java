@@ -39,6 +39,9 @@ class ArticleRenderer {
         }
     }
 
+    /** 有序列表序号：整篇文章累计（跨相邻 ol 块连续） */
+    private static int olCounter = 0;
+
     private static View build(Context ctx, Block b) {
         switch (b.type) {
             case "h2":
@@ -50,7 +53,10 @@ class ArticleRenderer {
             case "code":
                 return code(ctx, b.text);
             case "li":
-                return listItem(ctx, b.text);
+                olCounter = 0;
+                return listItem(ctx, b.text, "•");
+            case "ol":
+                return listItem(ctx, b.text, String.valueOf(++olCounter) + ".");
             case "img":
                 return image(ctx, b.src, b.alt);
             case "topic":
@@ -63,8 +69,9 @@ class ArticleRenderer {
                 return linkCard(ctx, b);
             case "p":
             default:
+                olCounter = 0;
                 if (TextUtils.isEmpty(b.text)) return null;
-                return paragraph(ctx, b.text);
+                return paragraph(ctx, b.text, "center".equals(b.style));
         }
     }
 
@@ -82,7 +89,8 @@ class ArticleRenderer {
 
     private static TextView heading(Context ctx, String text, int sp, boolean bold) {
         TextView tv = new TextView(ctx);
-        tv.setText(text == null ? "" : text);
+        // 标题也支持行内标记（如整句加粗 / 局部高亮），但默认已经是粗体
+        InlineRenderer.apply(tv, text == null ? "" : text);
         tv.setTextSize(sp);
         tv.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_text));
         if (bold) tv.setTypeface(Typeface.DEFAULT_BOLD);
@@ -95,13 +103,14 @@ class ArticleRenderer {
         return tv;
     }
 
-    private static TextView paragraph(Context ctx, String text) {
+    private static TextView paragraph(Context ctx, String text, boolean center) {
         TextView tv = new TextView(ctx);
-        tv.setText(text);
+        InlineRenderer.apply(tv, text);
         tv.setTextSize(15.5f);
         tv.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_text));
         tv.setLineSpacing(dp(ctx, 8), 1f);
         tv.setTextIsSelectable(true);
+        if (center) tv.setGravity(android.view.Gravity.CENTER);
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         p.topMargin = dp(ctx, 10);
@@ -109,20 +118,21 @@ class ArticleRenderer {
         return tv;
     }
 
-    private static View listItem(Context ctx, String text) {
+    private static View listItem(Context ctx, String text, String marker) {
         LinearLayout row = new LinearLayout(ctx);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setLayoutParams(lp(dp(ctx, 6), 0));
 
         TextView dot = new TextView(ctx);
-        dot.setText("•");
+        dot.setText(marker == null ? "•" : marker);
         dot.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_accent));
         dot.setTextSize(15);
+        dot.setMinWidth(dp(ctx, 18));
         dot.setPadding(0, 0, dp(ctx, 8), 0);
         row.addView(dot);
 
         TextView tv = new TextView(ctx);
-        tv.setText(text == null ? "" : text);
+        InlineRenderer.apply(tv, text == null ? "" : text);
         tv.setTextSize(15);
         tv.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_text));
         tv.setLineSpacing(dp(ctx, 6), 1f);
@@ -146,7 +156,7 @@ class ArticleRenderer {
         wrap.addView(bar);
 
         TextView tv = new TextView(ctx);
-        tv.setText(text == null ? "" : text);
+        InlineRenderer.apply(tv, text == null ? "" : text);
         tv.setTextSize(14.5f);
         tv.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_text));
         tv.setLineSpacing(dp(ctx, 6), 1f);
@@ -201,7 +211,25 @@ class ArticleRenderer {
                     .placeholder(android.R.color.transparent)
                     .into(iv);
         }
-        return iv;
+
+        // 有图注时包一层：图片 + 居中小字说明（对标公众号的图片说明）
+        if (alt == null || alt.trim().isEmpty()) return iv;
+
+        LinearLayout wrap = new LinearLayout(ctx);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        wrap.setLayoutParams(p);
+        iv.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        wrap.addView(iv);
+
+        TextView cap = new TextView(ctx);
+        cap.setText(alt.trim());
+        cap.setTextSize(12);
+        cap.setTextColor(ContextCompat.getColor(ctx, R.color.chaomi_text_dim));
+        cap.setGravity(android.view.Gravity.CENTER);
+        cap.setPadding(dp(ctx, 6), dp(ctx, 6), dp(ctx, 6), 0);
+        wrap.addView(cap);
+        return wrap;
     }
 
     /** 播放 GIF：API 28+ 用 ImageDecoder，低版本用 Movie 逐帧 */

@@ -78,4 +78,20 @@
         android:background="@color/chaomi_surface_2"
         android:scaleType="centerCrop"
         android:visibility="gone" />
+
+    <EditText
+        android:id="@+id/bAlt"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_marginTop="4dp"
+        android:background="@color/chaomi_surface_2"
+        android:hint="图片说明（可选，显示在图片下方）"
+        android:maxLines="1"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:singleLine="true"
+        android:textColor="@color/chaomi_text"
+        android:textColorHint="@color/chaomi_text_dim"
+        android:textSize="12sp"
+        android:visibility="gone" />
 </LinearLayout>
