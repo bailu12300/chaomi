@@ -16,55 +16,53 @@
         app:title="超米"
         app:titleTextColor="@color/chaomi_text" />
 
+    <!-- 顶部栏：账号 + 更多菜单（原先把「节点/监控/运动」全平铺，太挤且换机后更难找） -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp"
-        android:paddingBottom="4dp"
-        android:gravity="center_vertical">
+        android:paddingStart="12dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="6dp">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAccount"
             style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
             android:layout_weight="1"
             android:insetLeft="0dp"
             android:insetRight="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
             android:gravity="start|center_vertical"
+            android:paddingStart="0dp"
+            android:paddingEnd="0dp"
             android:text="登录"
             android:textColor="@color/chaomi_accent"
-            android:textSize="13sp" />
+            android:textSize="13.5sp" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnNode"
+            android:id="@+id/btnMore"
             style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
             android:insetLeft="0dp"
             android:insetRight="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
             android:minWidth="0dp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:text="节点"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="功能"
             android:textColor="@color/chaomi_text_dim"
-            android:textSize="12sp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnAdSkip"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:insetLeft="0dp"
-            android:insetRight="0dp"
-            android:minWidth="0dp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:text="净屏"
-            android:textColor="@color/chaomi_text_dim"
-            android:textSize="12sp" />
+            android:textSize="13sp"
+            app:icon="@android:drawable/ic_menu_sort_by_size"
+            app:iconGravity="textStart"
+            app:iconPadding="4dp"
+            app:iconSize="18dp"
+            app:iconTint="@color/chaomi_text_dim" />
     </LinearLayout>
 
     <!-- ===== 天气卡片（按定位 / IP 自动取当前城市）===== -->

@@ -138,7 +138,7 @@ public class Api {
         setToken("");
     }
 
-    /** 发送验证码；返回 devCode（服务端未配 SMTP 时直接给出，内测模式） */
+    /** 发送验证码。返回值仅为兼容保留（正常情况恒为空，验证码只发到邮箱） */
     public static String sendCode(String email, String purpose) throws Exception {
         Map<String, Object> b = new LinkedHashMap<>();
         b.put("email", email);
@@ -499,6 +499,26 @@ public class Api {
         return d instanceof Map ? (Map<String, Object>) d : new LinkedHashMap<>();
     }
 
+    /** 服务监控总览：第三方服务（DeepSeek/GPT/CF 等）在线状态 */
+    public static WatchStatus watchStatus() throws Exception {
+        String json = get(BASE + "/api/watch/status");
+        Map<String, Object> root = gson.fromJson(json, Map.class);
+        if (root == null || err(root) != null) throw new Exception("监控数据获取失败");
+        WatchStatus s = new WatchStatus();
+        Object d = root.get("data");
+        if (!(d instanceof Map)) return s;
+        Map<String, Object> dm = (Map<String, Object>) d;
+        Object list = dm.get("list");
+        if (list != null) {
+            s.list = gson.fromJson(gson.toJson(list), new TypeToken<List<WatchResult>>() {}.getType());
+        }
+        if (s.list == null) s.list = new ArrayList<>();
+        s.up = (int) num(dm.get("up"));
+        s.down = (int) num(dm.get("down"));
+        s.interval = (int) num(dm.get("interval"));
+        return s;
+    }
+
     // ---------- 硬件行情 ----------
 
     public static List<HwModel> hwModels() throws Exception {
@@ -668,6 +688,212 @@ public class Api {
         Object e = root.get("error");
         if (e != null && !String.valueOf(e).isEmpty()) return String.valueOf(e);
         return null;
+    }
+
+    /** 短视频去水印：提交分享内容，返回解析结果 */
+    public static WmResult watermark(String raw) throws Exception {
+        java.util.Map<String, Object> body = new LinkedHashMap<>();
+        body.put("url", raw);
+        String json = post(BASE + "/api/watermark", gson.toJson(body));
+        java.util.Map<String, Object> root = gson.fromJson(json, java.util.Map.class);
+        if (root == null || err(root) != null) throw new Exception("解析失败");
+        Object d = root.get("data");
+        if (!(d instanceof java.util.Map)) throw new Exception("解析失败");
+        return gson.fromJson(gson.toJson(d), WmResult.class);
+    }
+
+    /** 去水印下载地址（走服务端代理，绕过平台 Referer 防盗链） */
+    public static String watermarkDownloadUrl(String videoUrl, String referer, String fileName) {
+        try {
+            String u = java.net.URLEncoder.encode(videoUrl == null ? "" : videoUrl, "UTF-8");
+            String r = java.net.URLEncoder.encode(referer == null ? "" : referer, "UTF-8");
+            String n = java.net.URLEncoder.encode(fileName == null ? "video.mp4" : fileName, "UTF-8");
+            return BASE + "/api/watermark/dl?u=" + u + "&r=" + r + "&name=" + n;
+        } catch (Exception e) {
+            return BASE + "/api/watermark/dl?u=";
+        }
+    }
+
+    // ---------- 账号体系延展 ----------
+
+    /** 修改密码，返回服务端提示语 */
+    public static String changePassword(String oldPw, String newPw) throws Exception {
+        java.util.Map<String, Object> body = new LinkedHashMap<>();
+        body.put("oldPassword", oldPw);
+        body.put("newPassword", newPw);
+        String json = post(BASE + "/api/auth/password", gson.toJson(body));
+        java.util.Map<String, Object> root = gson.fromJson(json, java.util.Map.class);
+        if (root == null || err(root) != null) throw new Exception(msgOf(root, "修改失败"));
+        Object d = root.get("data");
+        if (d instanceof java.util.Map) {
+            Object m = ((java.util.Map) d).get("message");
+            if (m != null) return String.valueOf(m);
+        }
+        return "密码已修改";
+    }
+
+    /** 登录设备信息 */
+    static class SessionInfo {
+        String tokenMasked;
+        long createdAt;
+        long expiresAt;
+        boolean current;
+    }
+
+    /** 列出登录设备 */
+    public static List<SessionInfo> sessions() throws Exception {
+        String json = get(BASE + "/api/auth/sessions");
+        java.util.Map<String, Object> root = gson.fromJson(json, java.util.Map.class);
+        if (root == null || err(root) != null) throw new Exception(msgOf(root, "获取失败"));
+        Object d = root.get("data");
+        if (!(d instanceof java.util.Map)) return new ArrayList<>();
+        Object list = ((java.util.Map) d).get("list");
+        if (list == null) return new ArrayList<>();
+        List<SessionInfo> out = gson.fromJson(gson.toJson(list),
+                new TypeToken<List<SessionInfo>>() {}.getType());
+        return out == null ? new ArrayList<>() : out;
+    }
+
+    /** 踢掉其它设备，返回提示语 */
+    public static String kickOtherSessions() throws Exception {
+        String json = request("DELETE", BASE + "/api/auth/sessions", null);
+        java.util.Map<String, Object> root = gson.fromJson(json, java.util.Map.class);
+        if (root == null || err(root) != null) throw new Exception(msgOf(root, "操作失败"));
+        Object d = root.get("data");
+        if (d instanceof java.util.Map) {
+            Object m = ((java.util.Map) d).get("message");
+            if (m != null) return String.valueOf(m);
+        }
+        return "已退出其它设备";
+    }
+
+    /** 我的内容（posts/comments/likes），返回已格式化的展示行 */
+    public static List<String> myContents(String kind) throws Exception {
+        String json = get(BASE + "/api/me/contents?kind=" + kind + "&limit=50");
+        java.util.Map<String, Object> root = gson.fromJson(json, java.util.Map.class);
+        if (root == null || err(root) != null) throw new Exception(msgOf(root, "获取失败"));
+        Object d = root.get("data");
+        if (!(d instanceof java.util.Map)) return new ArrayList<>();
+        Object list = ((java.util.Map) d).get("list");
+        if (list == null) return new ArrayList<>();
+        List<java.util.Map<String, Object>> rows = gson.fromJson(gson.toJson(list),
+                new TypeToken<List<java.util.Map<String, Object>>>() {}.getType());
+        List<String> out = new ArrayList<>();
+        if (rows == null) return out;
+        for (java.util.Map<String, Object> r : rows) {
+            String line;
+            if ("comments".equals(kind)) {
+                String body = str(r.get("body"));
+                String pt = str(r.get("postTitle"));
+                if (body.length() > 60) body = body.substring(0, 60) + "…";
+                line = body + "\n在《" + (pt.isEmpty() ? "帖子" : pt) + "》下";
+            } else {
+                String t = str(r.get("title"));
+                if (t.isEmpty()) t = str(r.get("body"));
+                if (t.length() > 60) t = t.substring(0, 60) + "…";
+                if (t.isEmpty()) t = "（无正文）";
+                line = t + "\n" + num(r.get("likes")) + " 赞 · "
+                        + num(r.get("commentCount")) + " 评论 · "
+                        + num(r.get("views")) + " 阅读";
+            }
+            out.add(line);
+        }
+        return out;
+    }
+
+    /** 注销账号 */
+    public static void deleteAccount(String password, String confirm) throws Exception {
+        java.util.Map<String, Object> body = new LinkedHashMap<>();
+        body.put("password", password);
+        body.put("confirm", confirm);
+        String json = post(BASE + "/api/auth/delete", gson.toJson(body));
+        java.util.Map<String, Object> root = gson.fromJson(json, java.util.Map.class);
+        if (root == null || err(root) != null) throw new Exception(msgOf(root, "注销失败"));
+    }
+
+    private static String msgOf(java.util.Map<String, Object> root, String def) {
+        if (root != null) {
+            Object e = root.get("error");
+            if (e != null) return String.valueOf(e);
+        }
+        return def;
+    }
+
+    // ---------- 万能格式转换 ----------
+
+    /** 能力清单 */
+    static class Caps {
+        java.util.List<String> dataFrom = new ArrayList<>();
+        java.util.List<String> dataTo = new ArrayList<>();
+        java.util.List<String[]> codec = new ArrayList<>(); // [op, name]
+    }
+
+    public static Caps convertCaps() throws Exception {
+        String json = get(BASE + "/api/convert/caps");
+        java.util.Map<String, Object> root = gson.fromJson(json, java.util.Map.class);
+        Caps c = new Caps();
+        if (root == null || err(root) != null) return c;
+        Object d = root.get("data");
+        if (!(d instanceof java.util.Map)) return c;
+        java.util.Map<String, Object> dm = (java.util.Map<String, Object>) d;
+
+        Object dataObj = dm.get("data");
+        if (dataObj instanceof java.util.Map) {
+            java.util.Map<String, Object> dd = (java.util.Map<String, Object>) dataObj;
+            c.dataFrom = toStringList(dd.get("from"));
+            c.dataTo = toStringList(dd.get("to"));
+        }
+        Object codecObj = dm.get("codec");
+        if (codecObj instanceof java.util.List) {
+            for (Object o : (java.util.List) codecObj) {
+                if (o instanceof java.util.Map) {
+                    java.util.Map<String, Object> m = (java.util.Map<String, Object>) o;
+                    c.codec.add(new String[]{str(m.get("op")), str(m.get("name"))});
+                }
+            }
+        }
+        return c;
+    }
+
+    private static java.util.List<String> toStringList(Object o) {
+        java.util.List<String> out = new ArrayList<>();
+        if (o instanceof java.util.List) {
+            for (Object x : (java.util.List) o) out.add(str(x));
+        }
+        return out;
+    }
+
+    /** 数据格式转换，返回 [结果, 说明] */
+    public static String[] convertData(String from, String to, String text) throws Exception {
+        java.util.Map<String, Object> body = new LinkedHashMap<>();
+        body.put("from", from);
+        body.put("to", to);
+        body.put("text", text);
+        String json = post(BASE + "/api/convert/data", gson.toJson(body));
+        java.util.Map<String, Object> root = gson.fromJson(json, java.util.Map.class);
+        if (root == null || err(root) != null) throw new Exception(msgOf(root, "转换失败"));
+        Object d = root.get("data");
+        if (!(d instanceof java.util.Map)) throw new Exception("转换失败");
+        java.util.Map<String, Object> dm = (java.util.Map<String, Object>) d;
+        String result = str(dm.get("result"));
+        int rows = (int) num(dm.get("rows"));
+        int cols = (int) num(dm.get("cols"));
+        String info = from.toUpperCase() + " → " + to.toUpperCase()
+                + (rows > 0 ? "，" + rows + " 行 " + cols + " 列" : "");
+        return new String[]{result, info};
+    }
+
+    /** 编码/文本工具 */
+    public static String codec(String op, String text) throws Exception {
+        java.util.Map<String, Object> body = new LinkedHashMap<>();
+        body.put("op", op);
+        body.put("text", text);
+        String json = post(BASE + "/api/convert/codec", gson.toJson(body));
+        java.util.Map<String, Object> root = gson.fromJson(json, java.util.Map.class);
+        if (root == null || err(root) != null) throw new Exception(msgOf(root, "执行失败"));
+        Object d = root.get("data");
+        if (!(d instanceof java.util.Map)) throw new Exception("执行失败");
+        return str(((java.util.Map<String, Object>) d).get("result"));
     }
 
     private static String get(String u) throws Exception {

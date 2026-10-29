@@ -3,94 +3,388 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0d1117" />
-  <title>超米 · 图文社区</title>
+  <meta name="theme-color" content="#0b0f1a" />
+  <meta name="description" content="超米 · 好文分享社区与实时服务监控" />
+  <title>超米 · 社区</title>
   <link rel="manifest" href="assets/manifest.webmanifest" />
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="assets/styles.css?v=16" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="logo">超米</span>
-      <span class="tag">社区 · 好文分享</span>
-    </div>
-    <nav class="tabs">
-      <button class="tab active" data-view="feed">信息流</button>
-      <button class="tab" data-view="rss">资讯</button>
-      <button class="tab post-btn" id="openComposer">＋ 发布</button>
-    </nav>
-    <div class="me">
-      <button id="accBtn" class="accbtn">登录</button>
-      <span id="latChip" class="latchip" title="App ↔ 服务器 延迟（每 3 秒心跳）">
-        <span id="wsdot" class="dot off"></span>
-        <span id="latText">--</span>
-      </span>
-    </div>
-  </header>
-
-  <main>
-    <!-- ===== 天气卡片（自动按定位/IP 取当前城市）===== -->
-    <section id="weatherCard" class="wxcard" data-city="">
-      <div class="wxhead">
-        <span class="wxcity">定位中…</span>
-        <button class="wxswitch" id="wxSwitch" title="切换城市">切换</button>
-      </div>
-      <div class="wxmain">
-        <span class="wxicon">—</span>
-        <div class="wxtemp"><b>--</b><i>°</i></div>
-        <div class="wxdesc">
-          <span class="wxtext">加载中</span>
-          <span class="wxsub"></span>
+  <div class="app">
+    <!-- ===== 侧边导航（桌面） ===== -->
+    <aside class="sidenav" id="sidenav">
+      <div class="brand">
+        <span class="brand-logo">超</span>
+        <div class="brand-txt">
+          <b>超米</b>
+          <small>社区 · 监控</small>
         </div>
       </div>
-      <div id="wxDays" class="wxdays"></div>
-    </section>
 
-    <section id="feed" class="view active">
-      <div class="feedbar">
-        <div class="sorts">
-          <button class="fs active" data-fsort="">最新</button>
-          <button class="fs" data-fsort="hot">热门</button>
-          <button class="fs" data-fmine="1">我的</button>
+      <nav class="nav">
+        <button class="nav-item active" data-view="feed">
+          <span class="nav-ico">▤</span><span>信息流</span>
+        </button>
+        <button class="nav-item" data-view="rss">
+          <span class="nav-ico">☄</span><span>资讯</span>
+        </button>
+        <div class="nav-label">行情</div>
+        <button class="nav-item" data-view="fx">
+          <span class="nav-ico">¥</span><span>汇率</span>
+        </button>
+        <button class="nav-item" data-view="oil">
+          <span class="nav-ico">◈</span><span>油价</span>
+        </button>
+        <button class="nav-item" data-view="typhoon">
+          <span class="nav-ico">🌀</span><span>台风路径</span>
+        </button>
+        <div class="nav-label">工具</div>
+        <button class="nav-item" data-view="watermark">
+          <span class="nav-ico">✂</span><span>去水印</span>
+        </button>
+        <button class="nav-item" data-view="convert">
+          <span class="nav-ico">⇄</span><span>格式转换</span>
+        </button>
+        <div class="nav-label">服务</div>
+        <button class="nav-item" data-view="monitor">
+          <span class="nav-ico">◉</span><span>服务监控</span>
+          <span class="nav-badge hidden" id="monBadge"></span>
+        </button>
+        <button class="nav-item" data-view="weather">
+          <span class="nav-ico">☀</span><span>天气</span>
+        </button>
+        <!-- 管理员入口插槽：仅管理员可见，位置固定在导航最末的独立分组 -->
+        <div id="adminSlot" class="hidden">
+          <div class="nav-label">管理</div>
+          <button class="nav-item" id="adminEntry">
+            <span class="nav-ico">⚙</span><span>管理员后台</span>
+          </button>
         </div>
-        <input id="feedSearch" placeholder="搜标题 / 内容" />
-      </div>
-      <div id="tagRow" class="chips"></div>
-      <div id="postList"></div>
-      <div id="feedEmpty" class="empty">还没有内容，点「＋ 发布」发第一条吧。</div>
-      <div id="feedLoading" class="loading">加载中…</div>
-    </section>
+      </nav>
 
-    <!-- ===== 资讯（RSS）：一级菜单，二级为分类 ===== -->
-    <section id="rss" class="view">
-      <div class="rssbar">
-        <div id="rssCats" class="chips">
-          <div class="chip active" data-cat="">全部</div>
+      <div class="sidenav-foot">
+        <button class="nav-item" id="themeToggle">
+          <span class="nav-ico" id="themeIco">◐</span><span id="themeTxt">深色</span>
+        </button>
+        <div class="lat" id="latChip" title="App ↔ 服务器延迟（每 3 秒心跳）">
+          <span class="dot off" id="wsdot"></span>
+          <span id="latText">-- ms</span>
         </div>
       </div>
-      <div id="rssList" class="rsslist"></div>
-      <div id="rssEmpty" class="empty">还没有资讯，点下方「刷新」拉取</div>
-      <div id="rssLoading" class="loading hidden">加载中…</div>
-      <div class="rssfoot">
-        <button id="rssMore" class="rssmore">加载更多</button>
-      </div>
-    </section>
+    </aside>
 
-  </main>
+    <!-- ===== 主区 ===== -->
+    <div class="main">
+      <header class="topbar">
+        <button class="hamburger" id="hamburger">☰</button>
+        <div class="topbar-title" id="topbarTitle">信息流</div>
+        <div class="topbar-actions">
+          <span class="lat inline" id="latChipM" title="App ↔ 服务器延迟">
+            <span class="dot off" id="wsdotM"></span>
+            <span id="latTextM">--</span>
+          </span>
+          <button class="accbtn" id="accBtn">登录</button>
+          <button class="post-btn" id="openComposer">＋ 发布</button>
+        </div>
+      </header>
 
-  <!-- 型号详情（走势图） -->
-  <div id="mdl" class="sheet hidden">
-    <div class="sheet-mask" data-close></div>
-    <div class="sheet-body wide">
-      <div class="sheet-head">
-        <span id="mdlTitle">型号详情</span>
-        <button class="x" data-close>✕</button>
-      </div>
-      <div id="mdlBody"></div>
+      <main class="content">
+        <!-- ===== 信息流 ===== -->
+        <section id="view-feed" class="view active">
+          <div class="feedbar">
+            <div class="sorts">
+              <button class="fs active" data-fsort="">最新</button>
+              <button class="fs" data-fsort="hot">热门</button>
+              <button class="fs" data-fmine="1">我的</button>
+            </div>
+            <div class="search">
+              <input id="feedSearch" placeholder="搜索标题 / 内容" />
+            </div>
+          </div>
+          <div id="tagRow" class="chips"></div>
+          <div id="postList" class="feedlist"></div>
+          <div id="feedEmpty" class="empty hidden">还没有内容，点「＋ 发布」发第一条吧。</div>
+          <div id="feedLoading" class="loading hidden">加载中…</div>
+        </section>
+
+        <!-- ===== 资讯 ===== -->
+        <section id="view-rss" class="view">
+          <div class="rssbar">
+            <div id="rssCats" class="chips">
+              <div class="chip active" data-cat="">全部</div>
+            </div>
+            <button class="rss-refresh" id="rssRefreshBtn" title="拉取最新资讯">↻ 刷新</button>
+          </div>
+          <div id="rssList" class="rsslist"></div>
+          <div id="rssEmpty" class="empty hidden">还没有资讯，点「刷新」拉取</div>
+          <div id="rssLoading" class="loading hidden">加载中…</div>
+          <div class="rssfoot">
+            <button id="rssMore" class="rssmore">加载更多</button>
+          </div>
+        </section>
+
+        <!-- ===== 服务监控 ===== -->
+        <section id="view-monitor" class="view">
+          <div class="mon-head">
+            <div class="mon-title">
+              <h2>服务监控</h2>
+              <span class="mon-badge" id="monTopBadge">加载中</span>
+            </div>
+            <div class="mon-sub">第三方服务健康巡检 · 每 15 秒探测（每分钟 4 次）· 异常自动通知</div>
+          </div>
+
+          <div class="mon-cards">
+            <div class="mon-card"><div class="k">监控目标</div><div class="v" id="monTotal">--</div></div>
+            <div class="mon-card ok"><div class="k">在线</div><div class="v" id="monUp">--</div></div>
+            <div class="mon-card bad"><div class="k">异常</div><div class="v" id="monDown">--</div></div>
+            <div class="mon-card"><div class="k">平均延迟</div><div class="v"><span id="monMs">--</span><i>ms</i></div></div>
+          </div>
+        <!-- 监控详情：点卡片就地展示，可连续切换 -->
+        <div id="monDetail" class="mon-detail hidden">
+          <div class="md-head">
+            <span class="md-dot" id="mdDot"></span>
+            <span class="md-name" id="mdName">—</span>
+            <span class="md-badge" id="mdBadge"></span>
+            <button class="md-x" id="mdClose">收起 ✕</button>
+          </div>
+          <div class="md-stats">
+            <div><span class="k">当前延迟</span><b id="mdMs">—</b></div>
+            <div><span class="k">HTTP 状态</span><b id="mdCode">—</b></div>
+            <div><span class="k">最近检测</span><b id="mdAt">—</b></div>
+            <div><span class="k">连续失败</span><b id="mdStreak">—</b></div>
+          </div>
+          <div class="md-chart-title">延迟走势（最近 60 次探测，谷底为掉线）</div>
+          <div class="md-chart" id="mdChart"></div>
+          <div class="md-avail" id="mdAvail">—</div>
+          <div class="md-err hidden" id="mdErr"></div>
+        </div>
+
+          <div class="mon-grid" id="monGrid"></div>
+          <div class="mon-foot">数据由服务端每 15 秒采集 · 本页 5 秒刷新 · 点卡片看详情 · 异常自动推送飞书 + 邮件
+            <a href="/monitor/" target="_blank" rel="noopener" class="mon-link">查看图表版 ↗</a>
+          </div>
+        </section>
+
+        <!-- ===== 汇率 ===== -->
+        <section id="view-fx" class="view">
+          <div class="mon-head">
+            <div class="mon-title">
+              <h2>实时汇率</h2>
+              <span class="mon-badge" id="fxBadge">加载中</span>
+            </div>
+            <div class="mon-sub">主要货币兑人民币 · 含离岸人民币 CNH · 每 10 分钟更新</div>
+          </div>
+          <div class="fx-spread" id="fxSpread"></div>
+          <div class="chart-card">
+            <div class="chart-head">
+              <span class="chart-title">走势</span>
+              <span class="chart-pick" id="fxPick"></span>
+              <span class="chart-range" id="fxRange">
+                <button data-days="1" class="cr">1D</button>
+                <button data-days="7" class="cr active">7D</button>
+                <button data-days="30" class="cr">30D</button>
+              </span>
+            </div>
+            <div class="chart-body" id="fxChart"></div>
+          </div>
+          <div class="fx-grid" id="fxGrid"></div>
+          <div class="mon-foot">数据来源：currency-api（jsDelivr）· 点币种切换走势</div>
+        </section>
+
+        <!-- ===== 油价 ===== -->
+        <section id="view-oil" class="view">
+          <div class="mon-head">
+            <div class="mon-title">
+              <h2>油价监控</h2>
+              <span class="mon-badge" id="oilBadge">加载中</span>
+            </div>
+            <div class="mon-sub">国际原油期货 + 国内各省成品油零售价</div>
+          </div>
+          <h3 class="sec-title">国际原油</h3>
+          <div class="oil-crude" id="oilCrude"></div>
+          <div class="chart-card">
+            <div class="chart-head">
+              <span class="chart-title">走势</span>
+              <span class="chart-pick" id="oilPick"></span>
+              <span class="chart-range" id="oilRange">
+                <button data-days="1" class="cr">1D</button>
+                <button data-days="7" class="cr active">7D</button>
+                <button data-days="30" class="cr">30D</button>
+              </span>
+            </div>
+            <div class="chart-body" id="oilChart"></div>
+          </div>
+          <h3 class="sec-title">国内各省零售价（元/升）</h3>
+          <div class="oil-table-wrap">
+            <table class="oil-table">
+              <thead><tr><th>地区</th><th>92#</th><th>95#</th><th>0# 柴油</th></tr></thead>
+              <tbody id="oilBody"></tbody>
+            </table>
+          </div>
+          <div class="mon-foot">原油：Yahoo Finance · 零售价：icauto · 点品种切换走势</div>
+        </section>
+
+        <!-- ===== 台风路径 ===== -->
+        <section id="view-typhoon" class="view">
+          <div class="mon-head">
+            <div class="mon-title">
+              <h2>台风路径</h2>
+              <span class="mon-badge" id="tyBadge">加载中</span>
+            </div>
+            <div class="mon-sub">中央气象台实时台风路径 · 每 10 分钟更新</div>
+          </div>
+          <div class="ty-list" id="tyList"></div>
+          <div class="ty-frame-wrap">
+            <iframe id="tyFrame" class="ty-frame" src="about:blank" loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade"
+                    title="中央气象台台风路径"></iframe>
+          </div>
+          <div class="mon-foot">
+            地图来源：中央气象台 typhoon.nmc.cn ·
+            <a class="mon-link" href="https://typhoon.nmc.cn/web.html" target="_blank" rel="noopener">新窗口打开 ↗</a>
+          </div>
+        </section>
+
+        <!-- ===== 短视频去水印 ===== -->
+        <section id="view-watermark" class="view">
+          <div class="mon-head">
+            <div class="mon-title">
+              <h2>短视频去水印</h2>
+              <span class="mon-badge" id="wmBadge">就绪</span>
+            </div>
+            <div class="mon-sub">粘贴分享内容，自动提取无水印视频</div>
+          </div>
+
+          <div id="wmChannel" class="wm-channel hidden">
+            <span id="wmChannelTxt"></span>
+          </div>
+
+          <div class="wm-box">
+            <textarea id="wmInput" class="wm-input" rows="3"
+              placeholder="把分享内容整段粘贴进来，例如：&#10;【标题】 https://b23.tv/xxxxx&#10;7.94 复制打开抖音... https://v.douyin.com/xxxxx/"></textarea>
+            <div class="wm-actions">
+              <button id="wmPaste" class="wm-btn ghost" type="button">粘贴</button>
+              <button id="wmClear" class="wm-btn ghost" type="button">清空</button>
+              <button id="wmParse" class="wm-btn primary" type="button">开始解析</button>
+            </div>
+            <div class="wm-tips">
+              支持：<b>哔哩哔哩</b> / <b>抖音</b> / <b>TikTok</b> 直接下载无水印（含图集）· 快手 / 小红书 展开原链接
+            </div>
+          </div>
+
+          <div id="wmResult" class="wm-result hidden"></div>
+        </section>
+
+        <!-- ===== 万能格式转换 ===== -->
+        <section id="view-convert" class="view">
+          <div class="mon-head">
+            <div class="mon-title">
+              <h2>万能格式转换</h2>
+              <span class="mon-badge" id="cvBadge">就绪</span>
+            </div>
+            <div class="mon-sub">图片 / 数据 / 编码，全部在本站完成，不上传到第三方</div>
+          </div>
+
+          <div class="cv-tabs">
+            <button class="cv-tab active" data-cv="image">图片转换</button>
+            <button class="cv-tab" data-cv="data">数据格式</button>
+            <button class="cv-tab" data-cv="codec">编码工具</button>
+          </div>
+
+          <!-- 图片 -->
+          <div id="cv-image" class="cv-panel">
+            <div class="cv-drop" id="cvDrop">
+              <input type="file" id="cvFile" accept="image/*" hidden />
+              <div class="cv-drop-ico">🖼</div>
+              <div class="cv-drop-txt" id="cvDropTxt">点击选择图片，或把图片拖到这里</div>
+              <div class="cv-drop-sub">支持 PNG / JPEG / GIF / BMP / WebP，最大 20MB</div>
+            </div>
+            <div class="cv-row">
+              <label class="cv-label">输出格式</label>
+              <select id="cvImgTo" class="cv-select">
+                <option value="png">PNG</option>
+                <option value="jpg">JPEG</option>
+                <option value="gif">GIF</option>
+                <option value="bmp">BMP</option>
+              </select>
+              <label class="cv-label" id="cvQWrap">质量</label>
+              <input id="cvQuality" class="cv-range" type="range" min="40" max="100" value="90" />
+              <span class="cv-val" id="cvQVal">90</span>
+            </div>
+            <div class="cv-row">
+              <button id="cvImgGo" class="wm-btn primary" type="button">开始转换</button>
+              <a id="cvDownload" class="wm-btn" style="display:none" download>下载结果</a>
+            </div>
+            <div id="cvImgInfo" class="cv-note"></div>
+          </div>
+
+          <!-- 数据格式 -->
+          <div id="cv-data" class="cv-panel hidden">
+            <div class="cv-row">
+              <label class="cv-label">源格式</label>
+              <select id="cvFrom" class="cv-select"></select>
+              <label class="cv-label">目标</label>
+              <select id="cvTo" class="cv-select"></select>
+              <button id="cvDataGo" class="wm-btn primary" type="button">转换</button>
+            </div>
+            <textarea id="cvDataIn" class="wm-input" rows="8"
+              placeholder="粘贴源数据，例如：&#10;[{&quot;name&quot;:&quot;张三&quot;,&quot;age&quot;:28}]"></textarea>
+            <div class="cv-row" style="margin-top:8px">
+              <button id="cvCopy" class="wm-btn ghost" type="button">复制结果</button>
+              <span class="cv-note" id="cvDataInfo"></span>
+            </div>
+            <textarea id="cvDataOut" class="wm-input" rows="8" readonly
+              placeholder="转换结果会出现在这里"></textarea>
+          </div>
+
+          <!-- 编码 -->
+          <div id="cv-codec" class="cv-panel hidden">
+            <div class="cv-row">
+              <label class="cv-label">操作</label>
+              <select id="cvOp" class="cv-select"></select>
+              <button id="cvCodecGo" class="wm-btn primary" type="button">执行</button>
+            </div>
+            <textarea id="cvCodecIn" class="wm-input" rows="6" placeholder="输入内容"></textarea>
+            <div class="cv-row" style="margin-top:8px">
+              <button id="cvCopy2" class="wm-btn ghost" type="button">复制结果</button>
+            </div>
+            <textarea id="cvCodecOut" class="wm-input" rows="6" readonly
+              placeholder="结果会出现在这里"></textarea>
+          </div>
+        </section>
+
+        <!-- ===== 天气 ===== -->
+        <section id="view-weather" class="view">
+          <div class="weather-hero" id="weatherHero">
+            <div class="wx-city" id="wxCity">定位中…</div>
+            <div class="wx-temp"><b id="wxTemp">--</b><i>°</i></div>
+            <div class="wx-desc">
+              <span id="wxIcon" class="wx-icon">—</span>
+              <span id="wxText">加载中</span>
+              <span id="wxSub"></span>
+            </div>
+            <button class="wx-switch" id="wxSwitch">切换城市</button>
+          </div>
+          <div id="wxDays" class="wx-days"></div>
+        </section>
+      </main>
     </div>
   </div>
 
-  <!-- 发布器 -->
+  <!-- ===== 帖子详情 ===== -->
+  <div id="detail" class="sheet hidden">
+    <div class="sheet-mask" data-close></div>
+    <div class="sheet-body wide">
+      <div class="sheet-head">
+        <span>帖子详情</span>
+        <button class="x" data-close>✕</button>
+      </div>
+      <div id="detailBody"></div>
+    </div>
+  </div>
+
+  <!-- ===== 发布器 ===== -->
   <div id="composer" class="sheet hidden">
     <div class="sheet-mask" data-close></div>
     <div class="sheet-body">
@@ -104,7 +398,6 @@
         <button class="tt" data-type="link">链接</button>
         <button class="tt" data-type="article">公众号图文</button>
       </div>
-
       <div class="pane" data-pane="text">
         <textarea id="t_body" rows="5" placeholder="说点什么… 用 #话题 标记标签"></textarea>
       </div>
@@ -125,7 +418,6 @@
         </div>
         <div id="a_preview" class="article-preview hidden"></div>
       </div>
-
       <div class="sheet-foot">
         <span class="hint">以 <b id="nickEcho">匿名</b> 发布</span>
         <button id="submitPost" class="primary">发布</button>
@@ -133,39 +425,144 @@
     </div>
   </div>
 
-  <!-- 帖子详情（评论） -->
-  <div id="detail" class="sheet hidden">
-    <div class="sheet-mask" data-close></div>
-    <div class="sheet-body wide">
-      <div class="sheet-head">
-        <span>帖子详情</span>
-        <button class="x" data-close>✕</button>
-      </div>
-      <div id="detailBody"></div>
-    </div>
-  </div>
-
-  <div id="toast" class="toast hidden"></div>
-
-  <!-- 登录 / 注册 -->
+  <!-- ===== 登录 / 注册 ===== -->
   <div id="authSheet" class="sheet hidden">
     <div class="sheet-mask" data-close></div>
-    <div class="sheet-body">
+    <div class="sheet-body narrow">
       <div class="sheet-head">
         <span id="authTitle">登录</span>
         <button class="x" data-close>✕</button>
       </div>
       <div class="authform">
         <input id="authEmail" type="email" placeholder="邮箱" autocomplete="email" />
-        <input id="authPass" type="password" placeholder="密码（至少 6 位）" autocomplete="current-password" />
+        <div id="codeRow" class="coderow hidden">
+          <input id="authCode" placeholder="邮箱验证码" inputmode="numeric" maxlength="8"
+                 autocomplete="one-time-code" />
+          <button id="sendCodeBtn" class="codebtn" type="button">获取验证码</button>
+        </div>
+        <input id="authPass" type="password" placeholder="密码（至少 6 位）"
+               autocomplete="current-password" />
         <input id="authNick" placeholder="昵称（注册时填，可留空）" maxlength="20" class="hidden" />
         <button id="authSubmit" class="primary">登录</button>
-        <button id="authSwitch" class="linkbtn">还没有账号？去注册</button>
-        <p class="tipm">密码经 PBKDF2-SHA256 加盐后存储，服务端不保存明文。</p>
+        <div class="authlinks">
+          <button id="authSwitch" class="linkbtn" type="button">还没有账号？去注册</button>
+          <button id="authForgot" class="linkbtn" type="button">忘记密码</button>
+        </div>
+        <p class="tipm" id="authTip">密码经 PBKDF2-SHA256 加盐后存储，服务端不保存明文。</p>
       </div>
     </div>
   </div>
 
-  <script src="assets/app.js"></script>
+  <!-- 邮件链接落地：重置密码 -->
+  <div id="resetSheet" class="sheet hidden">
+    <div class="sheet-mask" data-close></div>
+    <div class="sheet-body narrow">
+      <div class="sheet-head">
+        <span>重置密码</span>
+        <button class="x" data-close>✕</button>
+      </div>
+      <div class="authform">
+        <p class="tipm" id="resetWho" style="margin:0 0 10px"></p>
+        <input id="resetPass" type="password" placeholder="新密码（至少 6 位）"
+               autocomplete="new-password" />
+        <input id="resetPass2" type="password" placeholder="再次输入新密码"
+               autocomplete="new-password" />
+        <button id="resetSubmit" class="primary">确认重置</button>
+        <p class="tipm">重置后旧密码立即失效，需用新密码登录。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 账号中心 -->
+  <div id="accountSheet" class="sheet hidden">
+    <div class="sheet-mask" data-close></div>
+    <div class="sheet-body wide">
+      <div class="sheet-head">
+        <span>账号中心</span>
+        <button class="x" data-close>✕</button>
+      </div>
+
+      <div class="acc-head">
+        <div class="acc-avatar" id="accAvatar">🙂</div>
+        <div class="acc-info">
+          <div class="acc-nick" id="accNick">—</div>
+          <div class="acc-mail" id="accMail">—</div>
+        </div>
+        <button class="acc-logout" id="accLogoutBtn" type="button">退出登录</button>
+      </div>
+
+      <div class="acc-tabs">
+        <button class="acc-tab active" data-atab="profile">资料</button>
+        <button class="acc-tab" data-atab="contents">我的内容</button>
+        <button class="acc-tab" data-atab="security">安全</button>
+      </div>
+
+      <!-- 资料 -->
+      <div id="atab-profile" class="atab">
+        <label class="acc-label">昵称</label>
+        <input id="accNickInput" class="acc-input" maxlength="20" placeholder="昵称" />
+        <label class="acc-label">简介</label>
+        <textarea id="accBioInput" class="acc-input" rows="3" maxlength="120"
+                  placeholder="一句话介绍自己"></textarea>
+        <button id="accSaveProfile" class="primary acc-full">保存资料</button>
+      </div>
+
+      <!-- 我的内容 -->
+      <div id="atab-contents" class="atab hidden">
+        <div class="acc-subtabs">
+          <button class="acc-sub active" data-ckind="posts">帖子</button>
+          <button class="acc-sub" data-ckind="comments">评论</button>
+          <button class="acc-sub" data-ckind="likes">点赞</button>
+        </div>
+        <div id="accContents" class="acc-list"><div class="loading">加载中…</div></div>
+      </div>
+
+      <!-- 安全 -->
+      <div id="atab-security" class="atab hidden">
+        <h4 class="acc-h4">修改密码</h4>
+        <input id="accOldPass" class="acc-input" type="password" placeholder="原密码" />
+        <input id="accNewPass" class="acc-input" type="password" placeholder="新密码（至少 6 位）" />
+        <input id="accNewPass2" class="acc-input" type="password" placeholder="再次输入新密码" />
+        <button id="accChangePass" class="primary acc-full">修改密码</button>
+
+        <h4 class="acc-h4">登录设备</h4>
+        <div id="accSessions" class="acc-list"><div class="loading">加载中…</div></div>
+        <button id="accKickOthers" class="acc-danger-btn">退出所有其它设备</button>
+
+        <h4 class="acc-h4">注销账号</h4>
+        <p class="acc-warn">注销会永久删除你的帖子、评论、点赞，无法恢复。</p>
+        <input id="accDelPass" class="acc-input" type="password" placeholder="输入密码确认" />
+        <input id="accDelConfirm" class="acc-input" placeholder="输入「注销」二字确认" />
+        <button id="accDeleteAccount" class="acc-danger-btn">永久注销账号</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 管理员后台 -->
+  <div id="adminSheet" class="sheet hidden">
+    <div class="sheet-mask" data-close></div>
+    <div class="sheet-body wide">
+      <div class="sheet-head">
+        <span>管理员后台</span>
+        <button class="x" data-close>✕</button>
+      </div>
+
+      <div class="adm-tabs">
+        <button class="adm-tab active" data-admtab="users">用户</button>
+        <button class="adm-tab" data-admtab="posts">帖子</button>
+        <button class="adm-tab" data-admtab="comments">评论</button>
+      </div>
+      <div class="adm-search">
+        <input id="admSearch" class="acc-input" placeholder="搜索昵称 / 邮箱 / 内容关键词" />
+        <button id="admRefresh" class="adm-btn" type="button">刷新</button>
+      </div>
+
+      <div id="adminStats" class="mon-cards"></div>
+      <div id="adminBody"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="assets/app.js?v=19"></script>
 </body>
 </html>

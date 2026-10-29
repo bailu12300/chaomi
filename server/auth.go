@@ -37,6 +37,7 @@ type CUser struct {
 	CreatedAt int64  `json:"createdAt"`
 	LastLogin int64  `json:"lastLogin,omitempty"`
 	PostCount int    `json:"postCount"`
+	IsAdmin   bool   `json:"isAdmin"`
 }
 
 // CBlock 文章原生块：客户端据此渲染，不依赖 WebView
@@ -161,12 +162,13 @@ func cUserByToken(db *sql.DB, tok string) *CUser {
 	var u CUser
 	var avatar, bio sql.NullString
 	var uid, regIp, lastIp sql.NullString
+	var isAdmin sql.NullInt64
 	err := db.QueryRow(`
-		SELECT u.id,u.email,u.nick,u.avatar,u.bio,u.created_at,u.last_login,u.uid,u.reg_ip,u.last_ip
+		SELECT u.id,u.email,u.nick,u.avatar,u.bio,u.created_at,u.last_login,u.uid,u.reg_ip,u.last_ip,u.is_admin
 		FROM c_sessions s JOIN c_users u ON u.id=s.user_id
 		WHERE s.token=? AND s.expires_at>?`, tok, time.Now().UnixMilli()).
 		Scan(&u.ID, &u.Email, &u.Nick, &avatar, &bio, &u.CreatedAt, &u.LastLogin,
-			&uid, &regIp, &lastIp)
+			&uid, &regIp, &lastIp, &isAdmin)
 	if err != nil {
 		return nil
 	}
@@ -175,6 +177,7 @@ func cUserByToken(db *sql.DB, tok string) *CUser {
 	u.UID = uid.String
 	u.RegIP = regIp.String
 	u.LastIP = lastIp.String
+	u.IsAdmin = isAdmin.Int64 == 1
 	return &u
 }
 
@@ -233,12 +236,11 @@ func handleAuthRegister(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "密码至少 6 位"})
 		return
 	}
-	// 验证码：配置了 SMTP 就必须校验；未配置时放行（内测模式，响应里会标注）
-	if smtpConfigured() {
-		if !verifyCode(db, b.Email, "register", b.Code) {
-			writeJSON(w, 400, map[string]string{"error": "验证码不正确或已过期"})
-			return
-		}
+	// ★ 验证码一律必校，不再有"未配 SMTP 就放行"的例外。
+	//   那个口子意味着邮件服务一挂，任何人都能无验证码批量注册。
+	if !verifyCode(db, b.Email, "register", b.Code) {
+		writeJSON(w, 400, map[string]string{"error": "验证码不正确或已过期，请重新获取"})
+		return
 	}
 	if b.Nick == "" {
 		b.Nick = strings.Split(b.Email, "@")[0]
@@ -271,6 +273,12 @@ func handleAuthRegister(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	}
 	u := CUser{ID: id, UID: uid, Email: b.Email, Nick: b.Nick,
 		RegIP: ip, LastIP: ip, CreatedAt: now, LastLogin: now}
+	// 白名单邮箱注册即管理员
+	if cIsAdminEmail(b.Email) {
+		if _, err := db.Exec(`UPDATE c_users SET is_admin=1 WHERE id=?`, id); err == nil {
+			u.IsAdmin = true
+		}
+	}
 	feishuNotify("超米 · 新用户注册",
 		fmt.Sprintf("邮箱 %s\n昵称 %s\nUID %s\nIP %s", b.Email, b.Nick, uid, ip))
 	writeJSON(w, 201, map[string]interface{}{"code": 0, "data": map[string]interface{}{"token": tok, "user": u}})
@@ -292,10 +300,11 @@ func handleAuthLogin(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	b.Email = strings.ToLower(strings.TrimSpace(b.Email))
 	var u CUser
 	var hash, salt, avatar, bio, uid, regIp, lastIp sql.NullString
-	err := db.QueryRow(`SELECT id,email,nick,pass_hash,salt,avatar,bio,created_at,uid,reg_ip,last_ip
+	var isAdmin sql.NullInt64
+	err := db.QueryRow(`SELECT id,email,nick,pass_hash,salt,avatar,bio,created_at,uid,reg_ip,last_ip,is_admin
 		FROM c_users WHERE email=?`, b.Email).
 		Scan(&u.ID, &u.Email, &u.Nick, &hash, &salt, &avatar, &bio, &u.CreatedAt,
-			&uid, &regIp, &lastIp)
+			&uid, &regIp, &lastIp, &isAdmin)
 	if err != nil {
 		writeJSON(w, 401, map[string]string{"error": "邮箱或密码错误"})
 		return
@@ -319,6 +328,12 @@ func handleAuthLogin(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	u.UID = uid.String
 	u.RegIP = regIp.String
 	u.LastIP = ip
+	u.IsAdmin = isAdmin.Int64 == 1
+	// 白名单邮箱登录时自愈：历史数据没标上的补一次
+	if !u.IsAdmin && cIsAdminEmail(u.Email) {
+		db.Exec(`UPDATE c_users SET is_admin=1 WHERE id=?`, u.ID)
+		u.IsAdmin = true
+	}
 	_ = db.QueryRow(`SELECT COUNT(*) FROM c_posts WHERE user_id=?`, u.ID).Scan(&u.PostCount)
 	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": map[string]interface{}{"token": tok, "user": u}})
 }
@@ -341,6 +356,10 @@ func handleAuthMe(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = db.QueryRow(`SELECT COUNT(*) FROM c_posts WHERE user_id=?`, u.ID).Scan(&u.PostCount)
+	if !u.IsAdmin && cIsAdminEmail(u.Email) {
+		db.Exec(`UPDATE c_users SET is_admin=1 WHERE id=?`, u.ID)
+		u.IsAdmin = true
+	}
 	writeJSON(w, 200, map[string]interface{}{"code": 0, "data": u})
 }
 

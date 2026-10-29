@@ -102,8 +102,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         loadRssCats();
         showTab(true);
 
-        startKeepAlive();
-        syncAdRules();
+        ensureNotifPermission();
 
         realtime = new Realtime(this);
         Api.bg(() -> {
@@ -166,10 +165,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         fab.setOnClickListener(v -> openComposer());
         btnAccount.setOnClickListener(v -> onAccountClick());
 
-        findViewById(R.id.btnAdSkip).setOnClickListener(v ->
-                startActivity(new Intent(this, AdSkipActivity.class)));
-        findViewById(R.id.btnNode).setOnClickListener(v ->
-                startActivity(new Intent(this, NodeActivity.class)));
+        findViewById(R.id.btnMore).setOnClickListener(v -> showToolsMenu());
 
         fLatest.setOnClickListener(v -> { feedSort = ""; feedMine = false; loadFeed(); });
         fHot.setOnClickListener(v -> { feedSort = "hot"; feedMine = false; loadFeed(); });
@@ -566,16 +562,6 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         startActivity(new Intent(this, ProfileActivity.class));
     }
 
-    private void syncAdRules() {
-        Api.bg(() -> {
-            try {
-                RuleSync.Result r = RuleSync.sync(this, false);
-                if (r.changed) android.util.Log.i("chaomi", "规则已更新: " + r.message);
-            } catch (Exception ignored) {
-            }
-        });
-    }
-
     private void promptLogin() {
         new AlertDialog.Builder(this)
                 .setTitle("需要登录")
@@ -780,14 +766,52 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
         });
     }
 
+    /**
+     * 「功能」菜单：把原来平铺在顶栏的入口收进来。
+     *
+     * 为什么改：原先顶栏挤了「节点/监控/运动/净屏」四个文字按钮，
+     * 小屏机（尤其 360dp 宽）会换行或压成两行，视觉很乱；
+     * 而且新加「去水印」后彻底放不下。收进菜单后顶栏只剩「账号 + 功能」，
+     * 清爽且可无限扩展。
+     */
+    private void showToolsMenu() {
+        final String[] items = {
+                "服务监控（第三方在线状态）",
+                "节点延迟（网络质量）",
+                "运动（速度 / 步数）",
+                "短视频去水印",
+                "万能格式转换",
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("功能")
+                .setItems(items, (d, which) -> {
+                    switch (which) {
+                        case 0:
+                            startActivity(new Intent(this, WatchActivity.class));
+                            break;
+                        case 1:
+                            startActivity(new Intent(this, NodeActivity.class));
+                            break;
+                        case 2:
+                            startActivity(new Intent(this, MotionActivity.class));
+                            break;
+                        case 3:
+                            startActivity(new Intent(this, WatermarkActivity.class));
+                            break;
+                        case 4:
+                            startActivity(new Intent(this, ConvertActivity.class));
+                            break;
+                    }
+                })
+                .show();
+    }
+
     @Override
     public void onStatus(String s) {
     }
 
-    /** 启动常驻守护 + 申请通知权限 */
-    private void startKeepAlive() {
-        KeepAliveService.start(this);
-        KeepAliveReceiver.schedule(this);
+    /** 申请通知权限（实时消息提醒用；去广告模块已剥离到独立 App「米跳跳」） */
+    private void ensureNotifPermission() {
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             try {
                 if (checkSelfPermission("android.permission.POST_NOTIFICATIONS")
@@ -797,9 +821,6 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
                 }
             } catch (Exception ignored) {
             }
-        }
-        if (!AdSkipPrefs.enabled(this) || !KeepAliveService.isAccessibilityOn(this)) {
-            AdSkipPrefs.sp(this).edit().putBoolean("asked", true).apply();
         }
     }
 }

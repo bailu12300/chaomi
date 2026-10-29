@@ -1,6 +1,6 @@
 // 超米 Service Worker —— 离线缓存应用壳
-const CACHE = "chaomi-v6";
-const SHELL = ["/community", "/community/assets/styles.css", "/community/assets/app.js", "/community/assets/manifest.webmanifest"];
+const CACHE = "chaomi-v7";
+const SHELL = ["/community", "/community/assets/styles.css", "/community/assets/app.js", "/community/assets/manifest.webmanifest", "/community/assets/icon.svg"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });

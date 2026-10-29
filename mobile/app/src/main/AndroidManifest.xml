@@ -16,12 +16,14 @@
         android:maxSdkVersion="32" />
 
     <!-- 后台常驻 -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- 运动传感器：计步器为可选硬件，没有也能装 -->
+
+    <!-- 运动传感器：均为可选硬件，缺失也能安装 -->
+    <uses-feature android:name="android.hardware.sensor.stepcounter" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.stepdetector" android:required="false" />
 
     <application
         android:name=".ChaomiApp"
@@ -76,53 +78,39 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
-            android:name=".RulesActivity"
-            android:exported="false"
-            android:parentActivityName=".AdSkipActivity" />
-
-        <activity
-            android:name=".AdSkipActivity"
-            android:exported="false"
-            android:parentActivityName=".MainActivity" />
-
-        <activity
             android:name=".NodeActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />
 
-        <!-- 无障碍服务：识别「跳过/关闭」并模拟点击（同李跳跳思路） -->
-        <service
-            android:name=".SkipAdService"
-            android:exported="true"
-            android:label="@string/ad_skip_label"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
-
-        <!-- 常驻前台服务 -->
-        <service
-            android:name=".KeepAliveService"
+        <activity
+            android:name=".WatchActivity"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:parentActivityName=".MainActivity" />
 
-        <!-- 开机 / 解锁 / 包替换 自动恢复 -->
-        <receiver
-            android:name=".KeepAliveReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
-                <action android:name="android.intent.action.USER_PRESENT" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-            </intent-filter>
-        </receiver>
+        <activity
+            android:name=".MotionActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".AccountSettingsActivity"
+            android:exported="false"
+            android:parentActivityName=".ProfileActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ConvertActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".WatermarkActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- 运动传感器：计步器为可选硬件，没有也能装 -->
 
             <!-- 拍照临时文件的 FileProvider（targetSdk 24+ 必须）-->
         <provider

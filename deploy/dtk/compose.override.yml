@@ -1,0 +1,32 @@
+# 小内存适配：本机 2G 物理 + 5G swap，原版要求 7.5G 会打爆主机
+services:
+  postgres:
+    mem_limit: 640m
+    memswap_limit: 1536m
+    command:
+      - postgres
+      - -c
+      - shared_buffers=96MB
+      - -c
+      - max_connections=40
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=32MB
+  redis:
+    mem_limit: 160m
+    memswap_limit: 320m
+  api:
+    mem_limit: 320m
+    memswap_limit: 768m
+  worker:
+    mem_limit: 320m
+    memswap_limit: 768m
+  browser-rpc:
+    mem_limit: 1100m
+    memswap_limit: 2400m
+    cpus: 1.5
+    tmpfs:
+      - /tmp:size=448m,mode=1777
+      - /profiles:size=192m,mode=0700,uid=10001,gid=10001
+    shm_size: 128mb

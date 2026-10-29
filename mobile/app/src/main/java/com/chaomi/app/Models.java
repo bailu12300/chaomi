@@ -232,3 +232,46 @@ class WeatherCard {
     long updatedAt;
     String source;
 }
+
+/** 服务监控：单个目标的当前状态（对应 /api/watch/status 的 list 项） */
+class WatchResult {
+    String key;
+    String name;
+    boolean ok;
+    int status;
+    long latencyMs;
+    String error;
+    int failStreak;
+    long checkedAt;
+}
+
+/** 服务监控总览 */
+class WatchStatus {
+    List<WatchResult> list;
+    int up;
+    int down;
+    int interval;
+}
+
+/** 短视频去水印解析结果 */
+class WmResult {
+    String platform;
+    String platformName;
+    String title;
+    String author;
+    String cover;
+    int duration;        // 秒
+    String videoUrl;     // 无水印直链
+    String originalUrl;
+    java.util.List<String> images;
+    String note;         // 提示 / 不支持的原因
+    boolean ok;
+}
+
+/** 格式转换能力清单 */
+class ConvertCaps {
+    java.util.List<String> dataFrom;
+    java.util.List<String> dataTo;
+    java.util.List<java.util.Map<String, String>> codec;
+}
+

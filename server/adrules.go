@@ -44,12 +44,20 @@ type adRule struct {
 }
 
 // 规则库版本：内容变更时递增，客户端据此判断是否需要重拉
-const adRulesVersion = 4
+const adRulesVersion = 5
 
 var adRulesUpdatedAt = time.Now().UnixMilli()
 
-// adRulesBuiltin 服务端内置的通用规则
-// 设计原则：只放「高置信度」的，宁可漏跳也不要误点
+// adRulesBuiltin 服务端下发的规则库
+//
+// ★ 只保留「跳过」类，一条都不含 × / 关闭 / 取消 / 我知道了。
+//
+//   之前这里塞了大量通用关闭词，客户端拿到后会在正常界面乱点
+//   （用户反馈"只要有 × 就会异常点击"）。服务器下发比内置更危险：
+//   它会覆盖到所有已安装机器，所以更不能放宽泛的词。
+//
+//   现在的原则：**服务端只存「跳过」**。这类词是广告专属信号，
+//   在任何 App 里含义一致，下发出去不会造成误触。
 func adRulesBuiltin() []adRule {
 	common := func(id, name, pkg string, matches []string, note string) adRule {
 		return adRule{
@@ -62,73 +70,17 @@ func adRulesBuiltin() []adRule {
 	}
 
 	out := []adRule{
-		// ---- 通用开屏 ----
-		common("srv.open.skip", "开屏 · 跳过按钮", "*",
-			[]string{"跳过", "跳过广告", "跳过此广告", "跳过开屏", "跳过 5", "skip", "skip ad"},
-			"绝大多数开屏广告的跳过键"),
-		common("srv.open.close", "开屏 · 关闭符号", "*",
-			[]string{"×", "✕", "✖", "╳", "✗", "⨯", "❌", "❎", "关闭"},
-			"纯符号关闭按钮"),
-		common("srv.popup.close", "弹窗 · 关闭", "*",
-			[]string{"我知道了", "知道了", "以后再说", "暂不更新", "稍后再说",
-				"残忍拒绝", "放弃更新", "不同意", "下次再说", "取消"},
-			"公告/更新/评分/隐私弹窗"),
-
-		// ---- ★ 摇一摇公告拦截 ----
-		// 摇一摇广告靠传感器触发跳转，不能靠点「关闭」，必须点它的「取消/关闭」
-		// 并在客户端侧同时屏蔽传感器。这里下发文本规则，客户端另有传感器抑制。
-		common("srv.shake.dismiss", "摇一摇 · 关闭入口", "*",
-			[]string{"摇一摇", "摇动手机", "扭一扭", "摇一摇跳转", "点击跳过", "跳过并关闭"},
-			"识别摇一摇广告的关闭/跳过入口"),
-
-		// ---- 信息流广告 ----
-		common("srv.feed.ad", "信息流 · 广告标记", "*",
-			[]string{"广告", "赞助", "推广", "AD"},
-			"信息流里的广告标识（仅在能点到 × 时生效）"),
-	}
-
-	// 视频类片头
-	out = append(out, adRule{
-		ID: "srv.video.pre", Name: "视频 · 跳过片头", Pkg: "com.qiyi.video",
-		Enabled: true, Source: "server", AppLabel: "爱奇艺",
-		Rules: []adAction{
-			{Matches: []string{"跳过片头", "跳过广告", "关闭广告"}, Action: "click"},
-		},
-	})
-	out = append(out, adRule{
-		ID: "srv.video.pre.tx", Name: "视频 · 跳过片头", Pkg: "com.tencent.qqlive",
-		Enabled: true, Source: "server", AppLabel: "腾讯视频",
-		Rules: []adAction{
-			{Matches: []string{"跳过片头", "跳过广告"}, Action: "click"},
-			{ViewIds: []string{"iv_close_ad", "btn_skip"}, Action: "click"},
-		},
-	})
-	out = append(out, adRule{
-		ID: "srv.video.pre.bili", Name: "视频 · 跳过片头", Pkg: "tv.danmaku.bili",
-		Enabled: true, Source: "server", AppLabel: "哔哩哔哩",
-		Rules: []adAction{
-			{Matches: []string{"跳过"}, Action: "click"},
-		},
-	})
-
-	// 电商开屏（这些最常有摇一摇）
-	for _, e := range []struct{ pkg, label string }{
-		{"com.taobao.taobao", "淘宝"},
-		{"com.jingdong.app.mall", "京东"},
-		{"com.xunmeng.pinduoduo", "拼多多"},
-		{"com.taobao.idlefish", "闲鱼"},
-		{"com.achievo.vipshop", "唯品会"},
-	} {
-		out = append(out, adRule{
-			ID: "srv.open." + e.pkg, Name: "开屏 · " + e.label, Pkg: e.pkg,
-			Enabled: true, Source: "server", AppLabel: e.label,
-			Note: "含摇一摇公告，客户端会同时抑制传感器",
-			Rules: []adAction{
-				{Matches: []string{"跳过", "跳过广告", "关闭", "×", "✕"}, Action: "click"},
-				// 摇一摇类：右下角常见「取消」
-				{Matches: []string{"取消", "关闭广告", "不感兴趣"}, Action: "click"},
+		// 唯一一条通配规则：全局「跳过」。
+		//
+		// 为什么只要一条：所有「跳过 XXX」的变体都包含「跳过」二字，
+		// 匹配时用 contains 就能覆盖，不需要为「跳过片头」「跳过广告」各建一条。
+		// 多条通配规则反而会重复点击同一个按钮。
+		common("srv.skip.universal", "通用 · 跳过广告", "*",
+			[]string{
+				"跳过", "跳過",
+				"skip", "skip ad", "skip ads", "skipad",
 			},
-		})
+			"广告专属词，误触风险极低；不含 × / 关闭 等通用按钮"),
 	}
 
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })

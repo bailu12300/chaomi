@@ -3047,6 +3047,14 @@ func doServe() error {
 	if err := ensureMailSchema(db); err != nil {
 		log.Printf("[serve] mail schema: %v", err)
 	}
+	if err := ensureAdminSchema(db); err != nil {
+		log.Printf("[serve] admin schema: %v", err)
+	}
+	// 汇率/油价/台风：建历史表 + 启动预热 + 定时保活
+	if err := ensureMarketsSchema(db); err != nil {
+		log.Printf("[serve] markets schema: %v", err)
+	}
+	StartMarketsPrewarm()
 	log.Printf("[serve] SMTP=%v FEISHU=%v", smtpConfigured(), feishuConfigured())
 	// 清理旧的云 GPU 表（改用 Amazon 后不再使用）
 	// 旧表清理（统一到 gpu_price）
@@ -3156,6 +3164,44 @@ func doServe() error {
 	mux.HandleFunc("/api/auth/profile", func(w http.ResponseWriter, r *http.Request) { handleAuthProfile(db, w, r) })
 	mux.HandleFunc("/api/auth/sendcode", func(w http.ResponseWriter, r *http.Request) { handleSendCode(db, w, r) })
 	mux.HandleFunc("/api/auth/reset", func(w http.ResponseWriter, r *http.Request) { handleResetPassword(db, w, r) })
+	mux.HandleFunc("/api/auth/forgot", func(w http.ResponseWriter, r *http.Request) { handleAuthForgot(db, w, r) })
+	mux.HandleFunc("/api/auth/reset-token", func(w http.ResponseWriter, r *http.Request) { handleAuthResetToken(db, w, r) })
+
+	// ---- 账号体系延展 ----
+	mux.HandleFunc("/api/auth/password", func(w http.ResponseWriter, r *http.Request) { handleChangePassword(db, w, r) })
+	mux.HandleFunc("/api/auth/sessions", func(w http.ResponseWriter, r *http.Request) { handleSessions(db, w, r) })
+	mux.HandleFunc("/api/auth/delete", func(w http.ResponseWriter, r *http.Request) { handleDeleteAccount(db, w, r) })
+	mux.HandleFunc("/api/me/contents", func(w http.ResponseWriter, r *http.Request) { handleMyContent(db, w, r) })
+
+	// ---- 管理后台 ----
+	mux.HandleFunc("/api/admin/overview", func(w http.ResponseWriter, r *http.Request) { handleAdminOverview(db, w, r) })
+	mux.HandleFunc("/api/admin/post/", func(w http.ResponseWriter, r *http.Request) { handleAdminPostDelete(db, w, r) })
+	mux.HandleFunc("/api/admin/comment/", func(w http.ResponseWriter, r *http.Request) { handleAdminCommentDelete(db, w, r) })
+	mux.HandleFunc("/api/admin/user/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/password") {
+			handleAdminResetPassword(db, w, r)
+			return
+		}
+		handleAdminUserRole(db, w, r)
+	})
+
+	// ---- 汇率 / 油价 / 台风 ----
+	mux.HandleFunc("/api/fx", func(w http.ResponseWriter, r *http.Request) { handleFx(w, r) })
+	mux.HandleFunc("/api/fx/history", func(w http.ResponseWriter, r *http.Request) { handleFxHistory(w, r) })
+	mux.HandleFunc("/api/oil", func(w http.ResponseWriter, r *http.Request) { handleOil(w, r) })
+	mux.HandleFunc("/api/oil/history", func(w http.ResponseWriter, r *http.Request) { handleOilHistory(w, r) })
+	mux.HandleFunc("/api/typhoon", func(w http.ResponseWriter, r *http.Request) { handleTyphoon(w, r) })
+
+	// ---- 万能格式转换 ----
+	mux.HandleFunc("/api/convert/caps", func(w http.ResponseWriter, r *http.Request) { handleConvertCaps(w, r) })
+	mux.HandleFunc("/api/convert/image", func(w http.ResponseWriter, r *http.Request) { handleImageConvert(w, r) })
+	mux.HandleFunc("/api/convert/data", func(w http.ResponseWriter, r *http.Request) { handleDataConvert(w, r) })
+	mux.HandleFunc("/api/convert/codec", func(w http.ResponseWriter, r *http.Request) { handleCodec(w, r) })
+
+	// ---- 短视频去水印 ----
+	mux.HandleFunc("/api/watermark", func(w http.ResponseWriter, r *http.Request) { handleWatermark(db, w, r) })
+	mux.HandleFunc("/api/watermark/dl", func(w http.ResponseWriter, r *http.Request) { handleWatermarkProxy(w, r) })
+	mux.HandleFunc("/api/watermark/status", func(w http.ResponseWriter, r *http.Request) { handleWatermarkStatus(w, r) })
 	mux.HandleFunc("/api/auth/avatar", func(w http.ResponseWriter, r *http.Request) { handleAvatarUpload(db, w, r) })
 	mux.HandleFunc("/api/auth/checkuid", func(w http.ResponseWriter, r *http.Request) { handleCheckUID(db, w, r) })
 	mux.HandleFunc("/api/user/uid/", func(w http.ResponseWriter, r *http.Request) {
@@ -3176,16 +3222,20 @@ func doServe() error {
 	mux.HandleFunc("/api/community/upload", func(w http.ResponseWriter, r *http.Request) { handleCommunityUpload(w, r) })
 	mux.HandleFunc("/ws/community", func(w http.ResponseWriter, r *http.Request) { serveWsCommunity(w, r) })
 	// 网页端（社区 PWA）已下线：只保留 App 客户端。
-	// /community 仍保留重定向，避免老书签 404。
+	// /community 无斜杠时规范化到 /community/（带斜杠，避免相对路径错乱）
 	communityDir = base + "/site/community"
 	mux.Handle("/community/uploads/", http.StripPrefix("/community/uploads/",
 		http.FileServer(http.Dir(communityDir+"/uploads"))))
 	mux.HandleFunc("/community", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/app", http.StatusFound)
+		http.Redirect(w, r, "/community/", http.StatusFound)
 	})
-	mux.HandleFunc("/community/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/app", http.StatusFound)
+	// /community/monitor/ 不做目录列出，转到 PHP 图表版（nginx 由 /monitor/ 提供）
+	mux.HandleFunc("/community/monitor/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/monitor/", http.StatusFound)
 	})
+	// /community/ 提供完整网页端（SPA：index.html + assets）
+	mux.Handle("/community/", http.StripPrefix("/community/",
+		http.FileServer(http.Dir(communityDir))))
 	// 原生 App 下载
 	mux.Handle("/downloads/", http.StripPrefix("/downloads/", http.FileServer(http.Dir(base+"/site/downloads"))))
 	mux.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) { handleAppDownloadPage(w, r) })

@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="8dp"
+    android:layout_marginBottom="6dp"
     app:cardBackgroundColor="@color/chaomi_surface"
     app:cardCornerRadius="12dp"
+    app:cardElevation="0dp"
     app:strokeColor="@color/chaomi_border"
     app:strokeWidth="1dp">
 
@@ -13,7 +15,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:padding="14dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -21,35 +23,54 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
+            <View
+                android:id="@+id/wDot"
+                android:layout_width="9dp"
+                android:layout_height="9dp"
+                android:background="@drawable/dot_ok" />
+
             <TextView
-                android:id="@+id/rName"
+                android:id="@+id/wName"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
                 android:layout_weight="1"
                 android:textColor="@color/chaomi_text"
                 android:textSize="14sp"
                 android:textStyle="bold" />
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/rSwitch"
+            <TextView
+                android:id="@+id/wStatus"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:text="正常"
+                android:textColor="@color/chaomi_down"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/wLat"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:text="--"
+                android:textColor="@color/chaomi_text_dim"
+                android:textSize="12sp" />
         </LinearLayout>
 
         <TextView
-            android:id="@+id/rPkg"
+            android:id="@+id/wErr"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textColor="@color/chaomi_accent"
-            android:textSize="11sp" />
+            android:layout_marginTop="6dp"
+            android:textColor="@color/chaomi_up"
+            android:textSize="12sp"
+            android:visibility="gone" />
 
         <TextView
-            android:id="@+id/rDetail"
+            android:id="@+id/wTime"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:lineSpacingExtra="2dp"
             android:textColor="@color/chaomi_text_dim"
             android:textSize="11sp" />
     </LinearLayout>

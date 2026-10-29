@@ -1472,6 +1472,11 @@ const appDownloadPage = `<!doctype html>
   details ol{margin:8px 0 0;padding-left:18px;line-height:1.9}
   details b{color:#e3b341}
   code{background:#0d1117;padding:1px 5px;border-radius:4px;color:#a5d6ff;font-size:11px}
+  .mtcard{margin-top:16px;background:#1c2128;border:1px solid #30363d;border-radius:12px;padding:16px;text-align:center}
+  .mt-title{color:#e3b341;font-weight:700;font-size:14px}
+  .mt-sub{color:#8b949e;font-size:12px;margin:6px 0}
+  .mt-btn{display:inline-block;background:#1f6feb;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:13px;margin:8px 0 4px}
+  .mt-btn:active{background:#388bfd}
 </style></head>
 <body><div class="card">
   <h1>超米</h1>
@@ -1480,6 +1485,12 @@ const appDownloadPage = `<!doctype html>
   <div class="meta">版本 __VER__ · 原生应用 · 支持 Android 5.0 及以上</div>
   <div class="meta">备用下载：<a href="https://github.com/bailu12300/chaomi/releases/latest"
      style="color:#58a6ff">GitHub Releases</a></div>
+  <div class="mtcard">
+    <div class="mt-title">🛡️ 米跳跳 · 独立跳过广告 App</div>
+    <div class="mt-sub">专注「高效跳过广告」一件事，与超米完全独立，互不影响</div>
+    <a class="mt-btn" href="/downloads/mitiaotiao-v1.5.0.apk">⬇ 下载米跳跳（APK）</a>
+    <div class="mt-sub">v1.5.0 · 客户端与服务端规则库均只保留「跳过」，不含任何 ×/关闭</div>
+  </div>
   <div class="tip">安装提示：安卓默认禁止「未知来源」安装。下载后点击 APK，按提示允许「允许来自此来源的应用」即可安装。</div>
   <div class="tip" style="margin-top:10px">
     <b style="color:#e3b341">本版功能</b><br>
@@ -1519,6 +1530,10 @@ func latestAPK() (name, version string) {
 	var best os.FileInfo
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(strings.ToLower(e.Name()), ".apk") {
+			continue
+		}
+		// 只认「超米」主 App 的包（chaomi- 前缀），跳过米跳跳等其它产品
+		if !strings.HasPrefix(strings.ToLower(e.Name()), "chaomi-") {
 			continue
 		}
 		info, err := e.Info()

@@ -78,6 +78,7 @@ func ensureMailSchema(db *sql.DB) error {
 		{"c_users", "uid", "uid VARCHAR(16) DEFAULT ''"},
 		{"c_users", "reg_ip", "reg_ip VARCHAR(64) DEFAULT ''"},
 		{"c_users", "last_ip", "last_ip VARCHAR(64) DEFAULT ''"},
+		{"c_users", "is_admin", "is_admin TINYINT DEFAULT 0"},
 	} {
 		if err := cAddColumn(db, c[0], c[1], c[2]); err != nil {
 			return err
@@ -230,28 +231,35 @@ func smtpSend(to, subject, body string) error {
 	msgID := fmt.Sprintf("<%d.%s@%s>", time.Now().UnixNano(),
 		cRandHex(8), domainOfMail(from))
 
-	// multipart/alternative：同时给纯文本与 HTML，
-	// 只有 HTML 的邮件在部分客户端会因"MIME 单部分"被判可疑。
-	boundary := "----chaomi" + cRandHex(12)
-	plain := stripHTMLTags(body)
+	// 正文编码策略（★ 送达率关键）
+	//
+	// 之前全用「multipart/alternative + 深色 HTML 卡片 + 大按钮链接 + 全 base64」：
+	// QQ 邮箱对这套组合垃圾评分很高，会出现 SMTP 收下但随后异步退信。
+	// 现在改为：
+	//   · 单部分 text/plain（事务性通知的标准形态）
+	//   · base64 编码正文（兼容性最好；含中文不会乱码）
+	//   · 链接以纯文本 URL 给出（不做 <a> 大按钮，避免被判钓鱼）
+	plain := body
+	if strings.TrimSpace(plain) == "" {
+		plain = "（本邮件无正文）"
+	}
+	plain = strings.ReplaceAll(plain, "\r\n", "\n")
+	plain = strings.ReplaceAll(plain, "\n", "\r\n")
 
 	msg := "From: " + nameEnc + " <" + from + ">\r\n" +
 		"To: " + to + "\r\n" +
+		"Reply-To: " + from + "\r\n" +
 		"Subject: " + subj + "\r\n" +
 		"Message-ID: " + msgID + "\r\n" +
 		"MIME-Version: 1.0\r\n" +
-		"Content-Type: multipart/alternative; boundary=\"" + boundary + "\"\r\n" +
-		"Date: " + time.Now().Format(time.RFC1123Z) + "\r\n" +
-		"\r\n" +
-		"--" + boundary + "\r\n" +
 		"Content-Type: text/plain; charset=UTF-8\r\n" +
-		"Content-Transfer-Encoding: base64\r\n\r\n" +
-		wrapB64(base64.StdEncoding.EncodeToString([]byte(plain))) + "\r\n" +
-		"--" + boundary + "\r\n" +
-		"Content-Type: text/html; charset=UTF-8\r\n" +
-		"Content-Transfer-Encoding: base64\r\n\r\n" +
-		wrapB64(base64.StdEncoding.EncodeToString([]byte(body))) + "\r\n" +
-		"--" + boundary + "--\r\n"
+		"Content-Transfer-Encoding: base64\r\n" +
+		"Date: " + time.Now().Format(time.RFC1123Z) + "\r\n" +
+		"X-Mailer: Chaomi-Mailer/1.1\r\n" +
+		// 声明是系统自动生成的事务性邮件，帮助收件方正确分类
+		"Auto-Submitted: auto-generated\r\n" +
+		"\r\n" +
+		wrapB64(base64.StdEncoding.EncodeToString([]byte(plain)))
 
 	if useTLS {
 		// 465 隐式 TLS
@@ -325,19 +333,20 @@ func codeMailHtml(code, purpose string) string {
 	if purpose == "reset" {
 		title = "重置密码"
 	}
-	return `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#0d1117;
-font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
-<div style="max-width:460px;margin:0 auto;background:#161b22;border:1px solid #30363d;
-border-radius:14px;padding:26px">
-<div style="font-size:20px;font-weight:800;color:#e6edf3;margin-bottom:6px">超米</div>
-<div style="color:#8b949e;font-size:13px;margin-bottom:20px">` + title + `验证码</div>
-<div style="font-size:34px;font-weight:800;letter-spacing:8px;color:#58a6ff;
-background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:16px;
-text-align:center;font-family:Menlo,Consolas,monospace">` + code + `</div>
-<div style="color:#8b949e;font-size:12px;margin-top:18px;line-height:1.8">
-10 分钟内有效。如果不是你本人操作，忽略这封邮件即可。<br>
-请勿把验证码告诉任何人，超米不会向你索要验证码。</div>
-</div></body></html>`
+	// 纯文本正文（单部分），不拼 HTML 卡片：
+	// QQ 对「深色 HTML + 大按钮」的事务邮件垃圾评分高，纯文本更稳。
+	return "超米 · " + title + "码\n" +
+		"\n" +
+		"你的" + title + "码是：\n" +
+		"\n" +
+		"    " + code + "\n" +
+		"\n" +
+		"10 分钟内有效。如果不是你本人操作，忽略这封邮件即可。\n" +
+		"请勿把验证码告诉任何人，超米不会向你索要验证码。\n" +
+		"\n" +
+		"-- \n" +
+		"超米\n" +
+		siteURL() + "/community/\n"
 }
 
 // ===== 飞书通知 =====
@@ -426,23 +435,11 @@ func handleSendCode(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 内测模式：未配置 SMTP 时不发信，直接把码返回（响应里明确标注）
+	// 未配置 SMTP：明确报错，**不再把验证码回给前端**。
+	// （把码返回等于绕过邮箱验证：任何人填别人邮箱就能拿到码）
 	if !smtpConfigured() {
-		code := newCode()
-		now := time.Now()
-		db.Exec(`INSERT INTO c_email_codes(email,code,purpose,created_at,expires_at,ip)
-			VALUES(?,?,?,?,?,?)`, b.Email, code, purpose,
-			now.UnixMilli(), now.Add(codeTTL).UnixMilli(), clientIP(r))
-		writeJSON(w, 200, map[string]interface{}{
-			"code": 0,
-			"data": map[string]interface{}{
-				"sent":      false,
-				"devMode":   true,
-				"devCode":   code,
-				"message":   "服务端未配置 SMTP，验证码直接返回（内测模式）",
-				"expiresIn": int(codeTTL.Seconds()),
-			},
-		})
+		writeJSON(w, 503, map[string]string{
+			"error": "邮件服务未配置，暂时无法发送验证码，请联系管理员"})
 		return
 	}
 
@@ -462,22 +459,15 @@ func handleSendCode(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	subject := "超米 · 注册验证码"
+	subject := "超米 · 注册验证"
 	if purpose == "reset" {
-		subject = "超米 · 重置密码验证码"
+		subject = "超米 · 密码重置验证"
 	}
 	if err := smtpSend(b.Email, subject, codeMailHtml(code, purpose)); err != nil {
-		// 发信失败也要把码给用户，否则注册流程彻底卡死
-		writeJSON(w, 200, map[string]interface{}{
-			"code": 0,
-			"data": map[string]interface{}{
-				"sent":      false,
-				"devMode":   true,
-				"devCode":   code,
-				"message":   "邮件发送失败，验证码已在下方直接给出",
-				"expiresIn": int(codeTTL.Seconds()),
-			},
-		})
+		// 发信失败：不把验证码回给前端，只提示重试/换邮箱。
+		// 那条把码返回的"兜底"是安全漏洞（能拿到别人邮箱的验证码），已移除。
+		writeJSON(w, 502, map[string]string{
+			"error": "邮件发送失败，请稍后重试，或换一个邮箱（如 QQ 邮箱有时会拦截）"})
 		return
 	}
 
@@ -491,7 +481,10 @@ func handleSendCode(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	// 为什么需要：国内邮件进垃圾箱/被运营商拦的概率不低，
 	// 用户拿不到码就完全无法注册登录（这是反复被卡住的真实原因）。
 	// 这是自建社区，注册量小，风险可控；正式对外开放时可关掉。
-	if env("CODE_FALLBACK", "true") == "true" {
+	// ★ 默认关闭（"false"）：把验证码回给客户端 = 任何人打开网站都能拿到别人的验证码，
+	//   可以直接注册/重置任意邮箱的密码，是严重安全问题。
+	//   只有在自测环境（正确配置 SMTP 前）才临时用 CODE_FALLBACK=true 打开。
+	if env("CODE_FALLBACK", "false") == "true" {
 		resp["devCode"] = code
 		resp["message"] = "验证码已发送到邮箱，同时已为你自动填入"
 	}

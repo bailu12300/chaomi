@@ -106,7 +106,8 @@ sftp.close()
 print("== 5) 清理旧包 + HTTP 验证 ==")
 cmd = (
     "cd /opt/cm-pricesite/site/downloads && "
-    "ls -1 *.apk 2>/dev/null | grep -v '^%s-v%s.apk$' | xargs -r rm -f; "
+    # 只清理「超米」的旧版本，别误删米跳跳等其它产品的包
+    "ls -1 chaomi-v*.apk 2>/dev/null | grep -v '^%s-v%s.apk$' | xargs -r rm -f; "
     "echo '--- 现存包 ---'; ls -la; "
     "echo '--- 下载页 ---'; curl -s --max-time 8 http://127.0.0.1:39581/app | grep -oE 'downloads/[a-z0-9.-]*apk|版本 [0-9.]+'; "
     "echo '--- APK HTTP ---'; curl -s -o /dev/null -w 'apk=%%{http_code} size=%%{size_download}\\n' --max-time 30 http://127.0.0.1:39581/downloads/%s"

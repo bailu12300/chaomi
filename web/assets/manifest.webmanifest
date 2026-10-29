@@ -1,11 +1,12 @@
 {
-  "name": "超米",
+  "name": "超米 · 社区",
   "short_name": "超米",
-  "description": "硬件行情 & 好文分享社区",
-  "start_url": "/community",
+  "description": "好文分享社区与实时服务监控",
+  "start_url": "/community/",
+  "scope": "/community/",
   "display": "standalone",
-  "background_color": "#0d1117",
-  "theme_color": "#0d1117",
+  "background_color": "#0b0f1a",
+  "theme_color": "#0b0f1a",
   "icons": [
     { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml" }
   ]
