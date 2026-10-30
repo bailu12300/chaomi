@@ -1488,8 +1488,8 @@ const appDownloadPage = `<!doctype html>
   <div class="mtcard">
     <div class="mt-title">🛡️ 米跳跳 · 独立跳过广告 App</div>
     <div class="mt-sub">专注「高效跳过广告」一件事，与超米完全独立，互不影响</div>
-    <a class="mt-btn" href="/downloads/mitiaotiao-v1.5.0.apk">⬇ 下载米跳跳（APK）</a>
-    <div class="mt-sub">v1.5.0 · 客户端与服务端规则库均只保留「跳过」，不含任何 ×/关闭</div>
+    <a class="mt-btn" href="/downloads/mitiaotiao-v1.6.0.apk">⬇ 下载米跳跳（APK）</a>
+    <div class="mt-sub">v1.6.0 · 重做后台保活（AlarmManager 兜底）+ 修复无障碍「用一会儿失效」</div>
   </div>
   <div class="tip">安装提示：安卓默认禁止「未知来源」安装。下载后点击 APK，按提示允许「允许来自此来源的应用」即可安装。</div>
   <div class="tip" style="margin-top:10px">

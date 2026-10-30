@@ -427,9 +427,13 @@ func handleWatermarkProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing u", 400)
 		return
 	}
+	// ★ Referer 必须和媒体域名匹配。
+	//   之前默认给 B 站的 Referer 去下抖音视频，抖音 CDN 直接 403 ——
+	//   前端显示"解析成功"但点下载一片空白。
+	//   现在按目标域名自动选，r 参数只作为兜底。
 	referer := r.URL.Query().Get("r")
-	if referer == "" {
-		referer = "https://www.bilibili.com/"
+	if referer == "" || !strings.HasPrefix(referer, "http") {
+		referer = ""
 	}
 	// 只允许代理已知平台的视频域名，避免被当成任意 URL 跳板
 	u, err := url.Parse(raw)
@@ -465,8 +469,43 @@ func handleWatermarkProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", 400)
 		return
 	}
-	req.Header.Set("User-Agent", biliUA)
-	req.Header.Set("Referer", referer)
+	// 按域名选 UA / Referer：各平台 CDN 的防盗链策略不同
+	ua := biliUA
+	host := strings.ToLower(u.Host)
+	switch {
+	case strings.Contains(host, "douyinvod"), strings.Contains(host, "douyin"),
+		strings.Contains(host, "amemv"), strings.Contains(host, "byteimg"),
+		strings.Contains(host, "zjcdn"), strings.Contains(host, "snssdk"),
+		strings.Contains(host, "pstatp"), strings.Contains(host, "bytecdn"),
+		strings.Contains(host, "ixigua"):
+		ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+			"(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+		if referer == "" {
+			referer = "https://www.douyin.com/"
+		}
+	case strings.Contains(host, "tiktok"):
+		if referer == "" {
+			referer = "https://www.tiktok.com/"
+		}
+	case strings.Contains(host, "kuaishou"):
+		if referer == "" {
+			referer = "https://www.kuaishou.com/"
+		}
+	case strings.Contains(host, "xiaohongshu"):
+		if referer == "" {
+			referer = "https://www.xiaohongshu.com/"
+		}
+	default: // B 站
+		if referer == "" {
+			referer = "https://www.bilibili.com/"
+		}
+	}
+
+	req.Header.Set("User-Agent", ua)
+	if referer != "" {
+		req.Header.Set("Referer", referer)
+	}
+	req.Header.Set("Accept", "*/*")
 	if rg := r.Header.Get("Range"); rg != "" {
 		req.Header.Set("Range", rg)
 	}
@@ -516,6 +555,9 @@ func handleWatermarkProxy(w http.ResponseWriter, r *http.Request) {
 //   POST /api/v1/parse  → 202 + task_id（默认异步）
 //   GET  /api/v1/tasks/{id} → state=done/failed + data
 //   鉴权：X-API-Key
+
+// wmDir 去水印独立页（/watermark/）的静态目录，main.go 启动时赋值
+var wmDir string
 
 const dtk5Base = "http://127.0.0.1:18000"
 

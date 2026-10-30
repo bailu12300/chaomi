@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  无障碍服务配置。
+  关键项说明：
+  - canRetrieveWindowContent：读取节点树（找「跳过」按钮的前提）
+  - canPerformGestures：允许 dispatchGesture 模拟点击。
+    ★ 很多开屏广告是 SurfaceView/自绘控件，只有手势能点中，
+      缺这一项 performAction 会一直失败 → 表现为"跳不过去"
+  - flagRetrieveInteractiveWindows：拿多窗口，开屏广告常在独立 overlay 里
+  - flagIncludeNotImportantViews：部分 App 把「跳过」标记为 not important
+  - notificationTimeout 120ms：开屏广告只显示 3-5 秒要快，但也不能太激进。
+    ★ 原值 50ms 会让 typeWindowContentChanged 回调密到几乎不间断
+      （列表滚动、动画、光标闪烁都会触发），主线程被反复扫描压住，
+      轻则耗电卡顿，重则 ANR —— 而 ANR 会被系统判定服务异常并停掉。
+      代码里另有 250ms 的「同包内容变化」节流兜底。
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewClicked|typeWindowsChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews|flagReportViewIds|flagRequestEnhancedWebAccessibility"
+    android:canRetrieveWindowContent="true"
+    android:canPerformGestures="true"
+    android:description="@string/ad_skip_desc"
+    android:notificationTimeout="120"
+    android:settingsActivity="com.mitiaotiao.app.MainActivity" />

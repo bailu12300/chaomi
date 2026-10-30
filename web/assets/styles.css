@@ -100,6 +100,8 @@ button { font-family: inherit; }
   background: transparent; color: var(--mut); font-size: 14.5px;
   cursor: pointer; text-align: left; transition: all .18s;
 }
+/* 去水印入口是 <a>，去掉默认下划线与链接色 */
+a.nav-item { text-decoration: none; }
 .nav-item:hover { background: var(--surface-2); color: var(--txt); }
 .nav-item.active { background: var(--surface-2); color: var(--txt); font-weight: 600; }
 .nav-item.active .nav-ico { color: var(--acc); }

@@ -6,7 +6,7 @@
 //   · HTML 与 JS/CSS 一律 network-first（在线拿最新，失败才回落缓存）
 //   · 只有图标这类真正不变的资源才 cache-first
 //   · CACHE 版本变化时清掉所有旧缓存
-const CACHE = "chaomi-v19";
+const CACHE = "chaomi-v20";
 const SHELL = [
   "/community/",
   "/community/assets/styles.css",

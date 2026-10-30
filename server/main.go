@@ -3240,6 +3240,14 @@ func doServe() error {
 	mux.Handle("/downloads/", http.StripPrefix("/downloads/", http.FileServer(http.Dir(base+"/site/downloads"))))
 	mux.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) { handleAppDownloadPage(w, r) })
 
+	// 去水印独立页（/watermark）—— 单文件自包含，不依赖社区 SPA
+	wmDir = base + "/site/watermark"
+	mux.HandleFunc("/watermark", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/watermark/", http.StatusFound)
+	})
+	mux.Handle("/watermark/", http.StripPrefix("/watermark/",
+		http.FileServer(http.Dir(wmDir))))
+
 	addr := envOr("PORT", listenDef)
 	if !strings.Contains(addr, ":") {
 		addr = "0.0.0.0:" + addr

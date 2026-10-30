@@ -1,0 +1,67 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.mitiaotiao.app'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.mitiaotiao.app'
+        minSdk 21
+        // ★ targetSdk 故意停在 32，不是疏漏。
+        //
+        //   Android 13(API 33) 起，targetSdk>=33 且**非应用商店安装**的应用会被
+        //   系统标记为「受限制」：无障碍开关在设置里直接灰掉、点了没反应。
+        //   必须在「应用信息 → 右上角 ⋮ → 允许受限设置」里手动放行才能用。
+        //   对一个"装完就要开无障碍"的工具 App 来说，这等于首次使用被卡死。
+        //
+        //   targetSdk 32 不受该策略约束，装完即可正常开启无障碍。
+        //   顺带的收益：不需要运行时申请 POST_NOTIFICATIONS，
+        //   前台服务类型限制也更宽松，对常驻守护有利。
+        //
+        //   代价：不能上架 Google Play（本项目本来就不上）。
+        targetSdk 32
+        versionCode 7
+        versionName '1.6.0'
+        vectorDrawables {
+            useSupportLibrary true
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    lint {
+        // targetSdk 32 是刻意选择（规避 Android 13+ 侧载应用的「受限设置」
+        // 导致无障碍开关被锁死）。lint 的 ExpiredTargetSdkVersion 是面向
+        // Google Play 上架场景的检查，本项目侧载分发，明确豁免。
+        checkReleaseBuilds false
+        abortOnError false
+        disable 'ExpiredTargetSdkVersion'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig null        }
+        debug {
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+}
