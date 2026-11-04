@@ -3150,6 +3150,7 @@ func doServe() error {
 
 	// ---- 采集端（App 回传）----
 	mux.HandleFunc("/api/crawler/targets", func(w http.ResponseWriter, r *http.Request) { handleCrawlerTargets(db, w, r) })
+	mux.HandleFunc("/api/hw/ingest", func(w http.ResponseWriter, r *http.Request) { handleHWCrawlerIngest(db, w, r) })
 
 	// ---- 节点监控 ----
 	mux.HandleFunc("/api/ping", handlePing)
@@ -3191,6 +3192,16 @@ func doServe() error {
 	mux.HandleFunc("/api/oil", func(w http.ResponseWriter, r *http.Request) { handleOil(w, r) })
 	mux.HandleFunc("/api/oil/history", func(w http.ResponseWriter, r *http.Request) { handleOilHistory(w, r) })
 	mux.HandleFunc("/api/typhoon", func(w http.ResponseWriter, r *http.Request) { handleTyphoon(w, r) })
+
+	// ---- 硬件行情（显卡/处理器/SSD/内存/笔记本）----
+	mux.HandleFunc("/api/hw/models", func(w http.ResponseWriter, r *http.Request) { handleHWModels(db, w, r) })
+	mux.HandleFunc("/api/hw/history/", func(w http.ResponseWriter, r *http.Request) {
+		rest := strings.TrimPrefix(r.URL.Path, "/api/hw/history/")
+		handleHWHistory(db, w, r, strings.SplitN(rest, "/", 2)[0])
+	})
+	mux.HandleFunc("/api/hw/status", func(w http.ResponseWriter, r *http.Request) { handleHWStatus(db, w, r) })
+	mux.HandleFunc("/api/hw/cats", func(w http.ResponseWriter, r *http.Request) { handleHWCatLabels(db, w, r) })
+	mux.HandleFunc("/api/hw/movers", func(w http.ResponseWriter, r *http.Request) { handleHWMovers(db, w, r) })
 
 	// ---- 万能格式转换 ----
 	mux.HandleFunc("/api/convert/caps", func(w http.ResponseWriter, r *http.Request) { handleConvertCaps(w, r) })
@@ -3247,6 +3258,14 @@ func doServe() error {
 	})
 	mux.Handle("/watermark/", http.StripPrefix("/watermark/",
 		http.FileServer(http.Dir(wmDir))))
+
+	// 硬件行情看板（/board）—— 深色行情页，表格 + 迷你趋势线
+	boardDir = base + "/site/board"
+	mux.HandleFunc("/board", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/board/", http.StatusFound)
+	})
+	mux.Handle("/board/", http.StripPrefix("/board/",
+		http.FileServer(http.Dir(boardDir))))
 
 	addr := envOr("PORT", listenDef)
 	if !strings.Contains(addr, ":") {

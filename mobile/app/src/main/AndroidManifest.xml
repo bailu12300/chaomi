@@ -17,6 +17,8 @@
 
     <!-- 后台常驻 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 前台服务（硬件行情采集） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
     <!-- 运动传感器：计步器为可选硬件，没有也能装 -->
 
@@ -109,6 +111,12 @@
             android:exported="false"
             android:parentActivityName=".MainActivity"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- 硬件行情采集前台服务 -->
+        <service
+            android:name=".HwCrawlService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- 运动传感器：计步器为可选硬件，没有也能装 -->
 

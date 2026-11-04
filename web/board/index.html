@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<title>硬件行情 · 显卡价格监控</title>
+<style>
+:root{
+  --bg:#0d1117; --bg2:#161b22; --bg3:#1c2128; --line:#262c36;
+  --fg:#e6edf3; --fg2:#9aa4b2; --fg3:#6e7681;
+  --up:#f85149; --down:#3fb950; --flat:#9aa4b2;   /* 中国习惯：涨红跌绿 */
+  --accent:#58a6ff; --accent2:#d2a8ff;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+body{padding:0 0 40px}
+
+header{position:sticky;top:0;z-index:20;background:rgba(13,17,23,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.hd{max-width:1080px;margin:0 auto;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#3fb950,#58a6ff);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#0d1117;flex:none}
+.brand h1{font-size:17px;font-weight:700;letter-spacing:.3px}
+.brand .sub{font-size:12px;color:var(--fg3);margin-top:1px}
+.meta{display:flex;align-items:center;gap:14px;font-size:12px;color:var(--fg2)}
+.meta b{color:var(--fg);font-weight:600}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px}
+.dot.ok{background:var(--down);box-shadow:0 0 6px var(--down)}
+.dot.err{background:var(--up)}
+
+.tabs{max-width:1080px;margin:0 auto;padding:10px 16px 0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:none;padding:7px 15px;border-radius:20px;font-size:13px;color:var(--fg2);cursor:pointer;border:1px solid var(--line);background:transparent;transition:.15s;user-select:none}
+.tab:hover{color:var(--fg);border-color:var(--fg3)}
+.tab.active{color:#0d1117;background:var(--fg);border-color:var(--fg);font-weight:600}
+
+.range{max-width:1080px;margin:0 auto;padding:8px 16px 0;display:flex;gap:6px;align-items:center;font-size:12px;color:var(--fg3)}
+.range .rg{flex:none;padding:4px 11px;border-radius:14px;border:1px solid var(--line);cursor:pointer;transition:.15s}
+.range .rg.active{color:var(--accent);border-color:var(--accent);background:rgba(88,166,255,.08)}
+.range .hint{margin-left:auto}
+
+main{max-width:1080px;margin:0 auto;padding:12px 16px}
+
+/* 列表 */
+.list{display:flex;flex-direction:column;gap:8px}
+.row{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer;transition:border-color .15s,transform .15s}
+.row:hover{border-color:#3b4450}
+.row-top{display:flex;align-items:center;gap:12px}
+.model{flex:1;min-width:0}
+.model .m{font-size:15px;font-weight:700;letter-spacing:.3px}
+.model .m .brand-tag{font-size:11px;font-weight:500;color:var(--accent2);margin-right:6px}
+.model .s{font-size:12px;color:var(--fg3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.price-box{text-align:right;flex:none}
+.price-box .p{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.3px}
+.price-box .p .cny{font-size:12px;font-weight:500;color:var(--fg3);margin-right:1px}
+.price-box .chg{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:1px}
+.chg.up{color:var(--up)} .chg.down{color:var(--down)} .chg.flat{color:var(--flat)}
+.spark{flex:none;width:110px;height:34px}
+.spark svg{width:100%;height:100%;display:block}
+
+/* 明细（点击展开） */
+.detail{display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.row.open .detail{display:block}
+.d-chart{width:100%;height:180px}
+.d-chart svg{width:100%;height:100%;display:block}
+.d-meta{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;font-size:12px;color:var(--fg2)}
+.d-meta div b{color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums}
+.d-shop{margin-top:10px;font-size:12px;color:var(--fg3)}
+.d-shop .plat{display:inline-block;padding:2px 8px;border-radius:6px;background:var(--bg3);border:1px solid var(--line);margin-right:6px;color:var(--fg2)}
+
+.empty{padding:60px 20px;text-align:center;color:var(--fg3);font-size:14px}
+.empty .ic{font-size:40px;margin-bottom:12px}
+.loading{padding:60px 20px;text-align:center;color:var(--fg3)}
+.spinner{width:26px;height:26px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;margin:0 auto 14px;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+footer{max-width:1080px;margin:24px auto 0;padding:0 16px;font-size:12px;color:var(--fg3);text-align:center;line-height:1.7}
+footer a{color:var(--accent);text-decoration:none}
+
+@media(max-width:560px){
+  .spark{width:84px}
+  .price-box .p{font-size:15px}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="hd">
+    <div class="brand">
+      <div class="logo">⚡</div>
+      <div>
+        <h1>硬件行情监控</h1>
+        <div class="sub">显卡 · 处理器 · 固态硬盘 · 内存条 · 笔记本</div>
+      </div>
+    </div>
+    <div class="meta" id="meta">
+      <span><span class="dot err" id="dot"></span><b id="count">—</b> 个型号</span>
+      <span>更新 <b id="upd">—</b></span>
+    </div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div class="range" id="range">
+    <span class="rg" data-days="7">7天</span>
+    <span class="rg" data-days="30">30天</span>
+    <span class="rg active" data-days="90">90天</span>
+    <span class="hint" id="hint">点击行看完整走势</span>
+  </div>
+</header>
+
+<main>
+  <div class="loading" id="loading"><div class="spinner"></div>正在加载行情…</div>
+  <div class="list" id="list"></div>
+  <div class="empty" id="empty" style="display:none">
+    <div class="ic">📭</div>
+    <div id="emptyMsg">暂无数据</div>
+  </div>
+</main>
+
+<footer>
+  数据来源：慢慢买采集（国内人民币价）· 涨跌为最近两轮采集对比 · 红涨绿跌<br>
+  仅作价格参考，非购买建议 · <a href="/" target="_blank">返回首页</a>
+</footer>
+
+<script>
+(function(){
+  var API = '/api/hw';
+  var state = { cat:'显卡', days:90, cats:[], rows:[], key:'', open:null };
+  var $ = function(s){ return document.querySelector(s); };
+
+  // 数值格式化
+  function fmtPrice(v){ if(v==null||isNaN(v))return '—'; return v.toLocaleString('zh-CN',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+  function fmtChg(v){ if(v==null||isNaN(v))return ''; return (v>0?'+':'')+v.toFixed(2)+'%'; }
+  function clsOf(v){ if(v>0)return'up'; if(v<0)return'down'; return'flat'; }
+
+  // sparkline（迷你趋势线）
+  function sparkSVG(vals, w, h, color){
+    w=w||110; h=h||34; var pad=2;
+    if(!vals||vals.length<2) return '<svg viewBox="0 0 '+w+' '+h+'"></svg>';
+    var lo=Math.min.apply(null,vals), hi=Math.max.apply(null,vals);
+    if(hi===lo) hi=lo+1;
+    var x=function(i){ return pad + (i/(vals.length-1))*(w-pad*2); };
+    var y=function(v){ return h-pad - ((v-lo)/(hi-lo))*(h-pad*2); };
+    var d=''; for(var i=0;i<vals.length;i++){ d += (i?'L':'M')+x(i).toFixed(1)+','+y(vals[i]).toFixed(1); }
+    return '<svg viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">'
+      +'<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>'
+      +'<circle cx="'+x(vals.length-1).toFixed(1)+'" cy="'+y(vals[vals.length-1]).toFixed(1)+'" r="2.2" fill="'+color+'"/>'
+      +'</svg>';
+  }
+
+  // 大图（含时间轴）
+  function bigSVG(points){
+    if(!points||points.length<2) return '';
+    var w=960,h=180,padL=8,padR=8,padT=10,padB=22;
+    var lo=1e18,hi=-1e18;
+    points.forEach(function(p){ if(p.ref<lo)lo=p.ref; if(p.ref>hi)hi=p.ref; });
+    if(hi===lo)hi=lo+1; var span=hi-lo;
+    var n=points.length;
+    var x=function(i){ return padL + (i/(n-1))*(w-padL-padR); };
+    var y=function(v){ return padT + (1-(v-lo)/span)*(h-padT-padB); };
+    var d=''; for(var i=0;i<n;i++){ d+=(i?'L':'M')+x(i).toFixed(1)+','+y(points[i].ref).toFixed(1); }
+    var area=d+'L'+x(n-1).toFixed(1)+','+(h-padB)+'L'+x(0).toFixed(1)+','+(h-padB)+'Z';
+    // 网格 + 最高/最低标线
+    var grid='';
+    for(var g=0;g<=4;g++){ var gy=padT+(h-padT-padB)*g/4; grid+='<line x1="'+padL+'" y1="'+gy+'" x2="'+(w-padR)+'" y2="'+gy+'" stroke="#262c36" stroke-width="1"/>'; }
+    var lbl='';
+    for(var t=0;t<=2;t++){ var i=Math.round((n-1)*t/2); var dt=new Date(points[i].ts*1000);
+      var lab=(dt.getMonth()+1)+'/'+dt.getDate();
+      lbl+='<text x="'+x(i)+'" y="'+(h-6)+'" fill="#6e7681" font-size="10" text-anchor="'+(t===0?'start':t===2?'end':'middle')+'">'+lab+'</text>';
+    }
+    var lastY=y(points[n-1].ref);
+    var hiLbl='<text x="'+(w-padR)+'" y="'+(padT+10)+'" fill="#9aa4b2" font-size="10" text-anchor="end">高 '+fmtPrice(hi)+'</text>';
+    var loLbl='<text x="'+(w-padR)+'" y="'+(h-padB-4)+'" fill="#9aa4b2" font-size="10" text-anchor="end">低 '+fmtPrice(lo)+'</text>';
+    return '<svg viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">'
+      +grid
+      +'<path d="'+area+'" fill="rgba(63,185,80,.08)"/>'
+      +'<path d="'+d+'" fill="none" stroke="#3fb950" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+      +'<circle cx="'+x(n-1).toFixed(1)+'" cy="'+lastY.toFixed(1)+'" r="3.5" fill="#3fb950"/>'
+      +hiLbl+loLbl+lbl
+      +'</svg>';
+  }
+
+  function trendColor(it){
+    var v = it.changePct;
+    if(v>0)return 'var(--up)'; if(v<0)return 'var(--down)'; return 'var(--accent2)';
+  }
+
+  function rowHTML(it){
+    var price = (it.price!=null&&it.price!==undefined)? it.price : null;
+    var chg = it.hasChange ? it.changePct : 0;
+    var chgCls = clsOf(chg);
+    var color = trendColor(it);
+    var trends = it.trends && it.trends.length ? it.trends : [];
+    var platform = it.platform || '';
+    var shop = it.shop || '';
+    var brand = it.brand ? '<span class="brand-tag">'+esc(it.brand)+'</span>' : '';
+    var spec = it.spec ? esc(it.spec) : '';
+    var title = it.title ? esc(it.title) : '';
+    var pText = price!=null ? '<span class="cny">¥</span>'+fmtPrice(price) : '暂无报价';
+    var chgText = it.hasChange ? fmtChg(chg) : (price!=null?'—':'暂无准确报价');
+
+    return '<div class="row" data-key="'+esc(it.key)+'">'
+      +'<div class="row-top">'
+      +'<div class="model"><div class="m">'+brand+esc(it.model)+'</div><div class="s">'+(spec?spec+' · ':'')+(title||platform||'')+'</div></div>'
+      +'<div class="spark">'+sparkSVG(trends,110,34,color)+'</div>'
+      +'<div class="price-box"><div class="p">'+pText+'</div><div class="chg '+chgCls+'">'+chgText+'</div></div>'
+      +'</div>'
+      +'<div class="detail"><div class="d-chart"></div>'
+      +'<div class="d-meta">'
+      +'<div>当前 <b>¥'+fmtPrice(price)+'</b></div>'
+      +'<div>涨跌 <b style="color:'+color+'">'+fmtChg(chg)+'</b></div>'
+      +(it.changeAbs? '<div>差价 <b>¥'+fmtPrice(it.changeAbs)+'</b></div>':'')
+      +'</div>'
+      +(platform||shop?'<div class="d-shop"><span class="plat">'+esc(platform||'平台')+'</span>'+esc(shop||'')+'</div>':'')
+      +'</div>'
+      +'</div>';
+  }
+
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+  function renderRows(){
+    var list = $('#list');
+    list.innerHTML = state.rows.map(rowHTML).join('');
+    // 绑定点击展开
+    list.querySelectorAll('.row').forEach(function(el){
+      el.addEventListener('click', function(){
+        var key = el.getAttribute('data-key');
+        var wasOpen = el.classList.contains('open');
+        list.querySelectorAll('.row.open').forEach(function(x){ x.classList.remove('open'); });
+        if(!wasOpen){
+          el.classList.add('open');
+          var dc = el.querySelector('.d-chart');
+          if(dc && !dc.innerHTML){ loadHistory(key, dc); }
+        }
+      });
+    });
+  }
+
+  function loadHistory(key, box){
+    box.innerHTML = '<div style="text-align:center;color:#6e7681;padding:40px">加载走势…</div>';
+    fetch(API+'/history/'+encodeURIComponent(key))
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var pts = (j&&j.data&&j.data.points)||[];
+        if(pts.length<2){ box.innerHTML='<div style="text-align:center;color:#6e7681;padding:40px">暂无足够历史数据</div>'; return; }
+        // 按 days 截断
+        if(state.days){
+          var cut = Date.now()/1000 - state.days*86400;
+          var f = pts.filter(function(p){ return p.ts >= cut; });
+          if(f.length>=2) pts = f;
+        }
+        box.innerHTML = bigSVG(pts);
+      })
+      .catch(function(){ box.innerHTML='<div style="text-align:center;color:#6e7681;padding:40px">加载失败</div>'; });
+  }
+
+  function loadCats(){
+    return fetch(API+'/cats').then(function(r){return r.json();}).then(function(j){
+      var cats = (j&&j.data&&j.data.cats)||[];
+      state.cats = cats;
+      var tabs = $('#tabs');
+      tabs.innerHTML = cats.map(function(c){
+        var active = (c.cat===state.cat)?' active':'';
+        return '<span class="tab'+active+'" data-cat="'+esc(c.cat)+'">'+esc(c.cat)+' <span style="opacity:.55">'+c.count+'</span></span>';
+      }).join('');
+      tabs.querySelectorAll('.tab').forEach(function(t){
+        t.addEventListener('click', function(){
+          state.cat = t.getAttribute('data-cat');
+          tabs.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('active'); });
+          t.classList.add('active');
+          load();
+        });
+      });
+    });
+  }
+
+  function load(){
+    $('#loading').style.display = 'block';
+    $('#list').innerHTML = '';
+    $('#empty').style.display = 'none';
+    var q = API+'/models?cat='+encodeURIComponent(state.cat)+'&sort=change_desc&limit=500';
+    fetch(q).then(function(r){return r.json();}).then(function(j){
+      state.rows = (j&&j.data&&j.data.models)||[];
+      $('#loading').style.display='none';
+      if(!state.rows.length){
+        $('#emptyMsg').textContent = '「'+state.cat+'」暂无数据';
+        $('#empty').style.display='block';
+      }
+      renderRows();
+      updateMeta(j);
+    }).catch(function(e){
+      $('#loading').style.display='none';
+      $('#emptyMsg').textContent = '加载失败：'+e;
+      $('#empty').style.display='block';
+    });
+  }
+
+  function updateMeta(j){
+    var st = (j&&j.data&&j.data.status)||{};
+    $('#count').textContent = state.rows.length;
+    var t = st.updatedAt || Date.now();
+    var d = new Date(t);
+    $('#upd').textContent = (d.getMonth()+1)+'/'+d.getDate()+' '+(d.getHours()<10?'0':'')+d.getHours()+':'+(d.getMinutes()<10?'0':'')+d.getMinutes();
+    $('#dot').className = 'dot ' + (state.rows.length?'ok':'err');
+  }
+
+  // range 切换
+  $('#range').addEventListener('click', function(e){
+    var rg = e.target.closest('.rg'); if(!rg) return;
+    state.days = parseInt(rg.getAttribute('data-days'),10);
+    $('#range').querySelectorAll('.rg').forEach(function(x){ x.classList.remove('active'); });
+    rg.classList.add('active');
+    // 已展开的图表重载
+    var open = $('#list').querySelector('.row.open');
+    if(open){ var dc=open.querySelector('.d-chart'); if(dc){ dc.innerHTML=''; loadHistory(open.getAttribute('data-key'), dc); } }
+  });
+
+  // 自动刷新
+  loadCats().then(load).catch(function(){ $('#loading').style.display='none'; $('#empty').style.display='block'; $('#emptyMsg').textContent='接口不可用'; });
+  setInterval(function(){ load(); }, 10*60*1000);
+})();
+</script>
+</body>
+</html>

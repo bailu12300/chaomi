@@ -781,6 +781,7 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
                 "运动（速度 / 步数）",
                 "短视频去水印",
                 "万能格式转换",
+                "硬件行情采集（后台）",
         };
         new AlertDialog.Builder(this)
                 .setTitle("功能")
@@ -801,8 +802,34 @@ public class MainActivity extends AppCompatActivity implements Realtime.Listener
                         case 4:
                             startActivity(new Intent(this, ConvertActivity.class));
                             break;
+                        case 5:
+                            showHwCrawlDialog();
+                            break;
                     }
                 })
+                .show();
+    }
+
+    /** 硬件行情采集开关：启动/停止前台采集服务 */
+    private void showHwCrawlDialog() {
+        boolean running = HwCrawlService.isRunning();
+        String msg = running
+                ? "采集服务正在后台运行。\n\n关闭后将停止采集，已采集的数据保留在服务器。"
+                : "开启后将在后台循环采集显卡价格（手机 IP 抓慢慢买，服务器负责清洗入库），"
+                + "需允许通知以维持前台服务。";
+        new AlertDialog.Builder(this)
+                .setTitle("硬件行情采集")
+                .setMessage(msg)
+                .setPositiveButton(running ? "停止采集" : "开始采集", (d, w) -> {
+                    if (running) {
+                        HwCrawlService.stop(this);
+                        toast("已停止行情采集");
+                    } else {
+                        HwCrawlService.startCompat(this);
+                        toast("已启动行情采集（后台）");
+                    }
+                })
+                .setNegativeButton("取消", null)
                 .show();
     }
 

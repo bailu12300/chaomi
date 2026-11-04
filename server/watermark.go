@@ -559,6 +559,9 @@ func handleWatermarkProxy(w http.ResponseWriter, r *http.Request) {
 // wmDir 去水印独立页（/watermark/）的静态目录，main.go 启动时赋值
 var wmDir string
 
+// boardDir 硬件行情看板（/board/）的静态目录，main.go 启动时赋值
+var boardDir string
+
 const dtk5Base = "http://127.0.0.1:18000"
 
 // dtk5Key 从环境变量读，缺失时返回空（此时抖音通道不可用，但 B 站不受影响）
